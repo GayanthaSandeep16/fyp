@@ -4,8 +4,7 @@ node_modules/
 # Truffle build directory
 build/
 
-# Truffle artifacts
-*.json
+
 
 # Environment variables
 .env
