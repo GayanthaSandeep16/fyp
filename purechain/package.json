@@ -13,10 +13,10 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "ipfs-http-client": "^57.0.3",
+    "solc": "^0.8.0",
     "web3": "^4.16.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9",
-    "solc": "^0.8.21"
+    "nodemon": "^3.1.9"
   }
 }
