@@ -13,6 +13,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "ipfs-http-client": "^57.0.3",
+    "pinata-web3": "^0.5.4",
     "solc": "^0.8.0",
     "web3": "^4.16.0"
   },
