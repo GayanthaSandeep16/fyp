@@ -1,46 +1,107 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.4.22 <0.9.0;
-
+pragma solidity ^0.8.0;
 
 contract DataQuality {
-    struct DataSubmission {
-        string ipfsHash;           // Hash of data stored in IPFS
-        uint256 timestamp;         // Submission timestamp
-        address submitter;         // Address of data submitter
-        bool validated;            // Validation status
-        uint256 qualityScore;     // Data quality score
+    struct User {
+        string name;
+        string organization;
+        string uniqueId;
+        int256 reputation;
+        bool isBlacklisted;
+        uint256 submissionCount;
     }
-    
-    // Mapping of data submissions
-    mapping(string => DataSubmission) public submissions;
-    
-    // Events
-    event DataSubmitted(string ipfsHash, address submitter);
-    event DataValidated(string ipfsHash, bool validated, uint256 qualityScore);
-    
-    // Submit data
-    function submitData(string memory ipfsHash) public {
-        require(submissions[ipfsHash].submitter == address(0), "Data already exists");
-        
-        submissions[ipfsHash] = DataSubmission({
-            ipfsHash: ipfsHash,
-            timestamp: block.timestamp,
-            submitter: msg.sender,
-            validated: false,
-            qualityScore: 0
-        });
-        
-        emit DataSubmitted(ipfsHash, msg.sender);
+
+    mapping(address => User) public users;
+    mapping(string => string) public dataHashes; // uniqueId => IPFS hash
+    address[] public userAddresses;
+
+    event UserPenalized(address indexed user, string uniqueId);
+    event DataSubmitted(address indexed user, string uniqueId, string ipfsHash);
+    event UserBlacklisted(address indexed user, string uniqueId);
+
+    uint256 public constant INITIAL_REPUTATION = 1;
+    int256 public constant REPUTATION_LOSS = 1;
+
+    modifier notBlacklisted() {
+        require(!users[msg.sender].isBlacklisted, "User is blacklisted");
+        _;
     }
-    
-    // Validate data
-    function validateData(string memory ipfsHash, bool isValid, uint256 score) public {
-        require(submissions[ipfsHash].submitter != address(0), "Data does not exist");
+
+    function submitData(
+        string memory name,
+        string memory organization,
+        string memory uniqueId,
+        string memory ipfsHash
+    ) public notBlacklisted {
+        require(bytes(ipfsHash).length > 0, "IPFS hash required");
         
-        DataSubmission storage submission = submissions[ipfsHash];
-        submission.validated = isValid;
-        submission.qualityScore = score;
+        User storage user = users[msg.sender];
         
-        emit DataValidated(ipfsHash, isValid, score);
+        if (user.submissionCount == 0) {
+            // New user
+            user.name = name;
+            user.organization = organization;
+            user.uniqueId = uniqueId;
+            user.reputation = int256(INITIAL_REPUTATION);
+            userAddresses.push(msg.sender);
+        } else {
+            // Existing user
+            require(
+                keccak256(abi.encodePacked(user.uniqueId)) == 
+                keccak256(abi.encodePacked(uniqueId)),
+                "Unique ID mismatch"
+            );
+        }
+
+        dataHashes[uniqueId] = ipfsHash;
+        user.submissionCount++;
+        
+        emit DataSubmitted(msg.sender, uniqueId, ipfsHash);
+    }
+
+    function penalizeUser(string memory uniqueId) public notBlacklisted {
+        User storage user = users[msg.sender];
+        require(user.submissionCount > 0, "No submissions to penalize");
+        require(
+            keccak256(abi.encodePacked(user.uniqueId)) == 
+            keccak256(abi.encodePacked(uniqueId)),
+            "Unique ID mismatch"
+        );
+
+        user.reputation -= REPUTATION_LOSS;
+        
+        if (user.reputation < 0) {
+            user.isBlacklisted = true;
+            emit UserBlacklisted(msg.sender, uniqueId);
+        }
+        
+        emit UserPenalized(msg.sender, uniqueId);
+    }
+
+    function getUserCount() public view returns (uint256) {
+        return userAddresses.length;
+    }
+
+    function getUserByAddress(address userAddress) 
+        public 
+        view 
+        returns (
+            string memory name,
+            string memory organization,
+            string memory uniqueId,
+            int256 reputation,
+            bool isBlacklisted,
+            uint256 submissionCount
+        ) 
+    {
+        User memory user = users[userAddress];
+        return (
+            user.name,
+            user.organization,
+            user.uniqueId,
+            user.reputation,
+            user.isBlacklisted,
+            user.submissionCount
+        );
     }
 }

@@ -11,7 +11,7 @@ module.exports = {
 
   compilers: {
     solc: {
-      version: "./node_modules/solc", // or "0.8.20", etc.
+      version: "0.8.0", // or "0.8.20", etc.
       settings: {
         optimizer: {
           enabled: true,

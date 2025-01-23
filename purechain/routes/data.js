@@ -1,75 +1,141 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const IPFS = require('ipfs-http-client');
-const Web3 = require('web3');
+const { spawn } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 
-const ipfs = IPFS.create({ url: process.env.IPFS_URL });
-const web3 = new Web3(new Web3.providers.HttpProvider(process.env.GANACHE_RPC_URL));
-const contract = new web3.eth.Contract(require('../contracts/Contract.json').abi, process.env.CONTRACT_ADDRESS);
+//Data Submission Endpoint
+router.post("/submit-data", async (req, res) => {
+  const { name, organization, id } = req.body; // User details
+  const { file } = req.files; // Uploaded data file
 
-// 1. Data Submission Endpoint
-router.post('/submit-data', async (req, res) => {
-  const { data } = req.body;
-  if (!validateData(data)) {
-    return res.status(400).json({ message: 'Data validation failed' });
+  if (!name || !organization || !id || !file) {
+    return res.status(400).json({ message: "Missing required fields" });
   }
-  try {
-    const ipfsResult = await ipfs.add(JSON.stringify(data));
-    const ipfsHash = ipfsResult.path;
-    const tx = await contract.methods.submitData(ipfsHash, true).send({
-      from: process.env.ACCOUNT_ADDRESS,
-      gas: 3000000
-    });
-    res.json({ message: 'Data submitted successfully', ipfsHash, transactionHash: tx.transactionHash });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
 
-// 2. Health Check Endpoint
-router.get('/health', async (req, res) => {
-  try {
-    const ipfsHealth = await ipfs.id();
-    const ganacheHealth = await web3.eth.net.isListening();
-    res.json({
-      status: 'healthy',
-      ipfs: ipfsHealth ? 'connected' : 'not connected',
-      ganache: ganacheHealth ? 'connected' : 'not connected'
-    });
-  } catch (error) {
-    console.error('Health check error:', error);
-    res.status(500).json({ status: 'unhealthy', error: 'Connection issues detected' });
-  }
-});
-
-// 3. Retrieve Data Result Endpoint
-router.get('/result/:ipfsHash', async (req, res) => {
-  const { ipfsHash } = req.params;
-  try {
-    const data = await ipfs.cat(ipfsHash);
-    const events = await contract.getPastEvents('DataSubmitted', {
-      filter: { ipfsHash },
-      fromBlock: 0,
-      toBlock: 'latest'
-    });
-    if (events.length === 0) {
-      return res.status(404).json({ message: 'No transaction found for given IPFS hash' });
+  //file save on temp folder
+  let filePath;
+    try {
+      filePath = await saveFileToTemp(file);
+    } catch (err) {
+      return res.status(500).json({ message: "File upload failed", error: err });
     }
+
+  // need to creatr method generate unique id
+  const uniqueId = generateUniqueId(name, organization, id);
+
+  // Step 1: Validate the data
+  const validation = await validateData(filePath);
+  console.log(validation); // Call your Python validator
+  if (validation.quality === "BAD") {
+    // Call submitData with isValid = false
+    await penalizeUser(name, organization, uniqueId);
+    return res.status(400).json({
+      message: "Data validation failed",
+      issues: validation.issues,
+    });
+  }
+
+  // Step 2: Upload to Pinata (IPFS)
+  try {
+     const ipfsHash = await uploadFileToPinata(filePath, {
+      name: `${name}_${Date.now()}`,
+      keyvalues: {
+        userId: id,
+        organization: organization,
+        uniqueId: uniqueId,
+        validationStatus: "VALID"
+      }
+    });
+
+    // Step 3: Save user details and IPFS hash in smart contract
+    const tx = await contract.methods
+      .submitData(name, organization, uniqueId, ipfsHash, true)
+      .send({
+        from: process.env.ACCOUNT_ADDRESS,
+        gas: 3000000,
+      });
+
     res.json({
-      data: JSON.parse(data.toString()),
-      transactionHash: events[0].transactionHash
+      message: "Data submitted successfully",
+      ipfsHash,
+      transactionHash: tx.transactionHash,
     });
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ message: 'Could not retrieve data result' });
+    console.error("Error:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// Validation function for data
-function validateData(data) {
-  // Implement your data validation logic here
-  return data && typeof data === 'object';
+async function saveFileToTemp(file) {
+  return new Promise((resolve, reject) => {
+    const tempDir = path.join(__dirname, "temp");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir); // Create temp directory if it doesn't exist
+    }
+
+    const filePath = path.join(tempDir, file.name);
+    file.mv(filePath, (err) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(filePath); // Resolve with the file path
+    });
+  });
+}
+
+// Function to generate unique ID
+function generateUniqueId(name, organization, id) {
+  return `${name}-${organization}-${id}`;
+}
+
+// Function to penalize user
+async function penalizeUser(name, organization, uniqueId) {
+  const tx = await contract.methods
+      .submitData(
+        name,
+        organization,
+        uniqueId,
+        "", // Empty IPFS hash for invalid data
+        false
+      )
+      .send({
+        from: process.env.ACCOUNT_ADDRESS,
+        gas: 3000000,
+      });
+  console.log("User penalized:", tx.transactionHash);
+}
+
+
+async function validateData(filePath) {
+  return new Promise((resolve, reject) => {
+    const pythonProcess = spawn("python", [
+      "./dataValidator/dataValidator.py",
+      filePath,
+    ]);
+
+    let result = "";
+    pythonProcess.stdout.on("data", (data) => {
+      result += data.toString();
+    });
+
+    pythonProcess.stderr.on("data", (data) => {
+      reject({ error: `Validator error: ${data.toString()}` });
+    });
+
+    pythonProcess.on("close", (code) => {
+      if (code !== 0) {
+        reject({ error: `Validator exited with code ${code}` });
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(result));
+      } catch (e) {
+        reject({ error: "Failed to parse validator output" });
+      }
+    });
+  });
 }
 
 module.exports = router;
