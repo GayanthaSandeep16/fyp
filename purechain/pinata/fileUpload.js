@@ -1,8 +1,9 @@
-require("dotenv").config();
 const pinataSDK = require("@pinata/sdk");
 const e = require("express");
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config();
+
 
 const { PINATA_API_KEY, PINATA_API_SECRET } = process.env;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -16,6 +17,9 @@ const pinata = new pinataSDK(PINATA_API_KEY, PINATA_API_SECRET);
 
 async function uploadFileToPinata(filePath, metadata = {}) {
   try {
+    if (!fs.existsSync(filePath)) {
+        throw new Error("File does not exist");
+    }
     const stats = fs.statSync(filePath);
 
     if (stats.size > MAX_FILE_SIZE) {
@@ -46,25 +50,10 @@ async function uploadFileToPinata(filePath, metadata = {}) {
     console.log("Timestamp:", result.Timestamp);
 
     return result.IpfsHash;
-  } catch (error) {
-    console.error("Error uploading file to Pinata:", error.message);
-    throw error;
+} catch (error) {
+    console.error("Error uploading file to Pinata:", error.message || error);
+    throw error instanceof Error ? error : new Error(error);
   }
 }
 
-// Usage example:
-(async () => {
-  const filePath = "./hello-world.txt";
-  const metadata = {
-    name: "HelloWorldFile",
-    keyvalues: {
-      category: "example",
-      owner: "user123",
-    },
-  };
-
-  const ipfsHash = await uploadFileToPinata(filePath, metadata);
-  console.log("Uploaded IPFS Hash:", ipfsHash);
-})();
-
-export { uploadFileToPinata };
+module.exports = { uploadFileToPinata };
