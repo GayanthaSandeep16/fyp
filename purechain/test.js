@@ -1,4 +1,4 @@
-const {validateData} = require('./routes/data');
+const {validateData} = require('./routes/endpoints');
 
 // Test function
 async function testValidation() {

@@ -7,6 +7,12 @@ const path = require("path");
 const { uploadFileToPinata } = require("../pinata/fileUpload");
 const DataQualityArtifact = require("../build/contracts/DataQuality.json");
 require("dotenv").config();
+const db = require('../database/database');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const authenticate = require('../middleware/auth');
+
+
 
 // Web3 Configuration
 const web3 = new Web3("HTTP://127.0.0.1:7545");
@@ -29,27 +35,36 @@ const contract = new web3.eth.Contract(
   { from: process.env.ACCOUNT_ADDRESS } // Add default from address
 );
 
-// Add these checks
-//console.log("Contract ABI:", DataQualityArtifact.abi);
-//console.log("Contract Address:", contractAddress);
 
 router.get("/test", (req, res) => {
   res.send("Hello FYP");
 });
 
 //Data Submission Endpoint
-router.post("/submit-data", async (req, res) => {
-  const { name, organization, id } = req.body; // User details
-  const file = req.files?.files; // Uploaded data file
+router.post("/submit-data", authenticate, async (req, res) => {
+  const file = req.files?.files;
 
   if (!file) {
-    return res.status(400).json({ message: "No file uploaded" });
+    return res.status(400).json({ message: "Missing file" });
   }
 
-  if (!name || !organization || !id || !file) {
-    return res.status(400).json({ message: "Missing required fields" });
-  }
+ 
+    // Get user from database using JWT data
+    const user = db.prepare(`
+      SELECT * FROM users WHERE id = ?
+    `).get(req.user.userId);
 
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Move all user-dependent logic inside the try block
+    if (!user.name || !user.organization || !user.id) {
+      return res.status(400).json({ message: "Invalid user data" });
+    }
+
+    console.log("User:", user);
+  
   //file save on temp folder
   let filePath;
   try {
@@ -61,14 +76,14 @@ router.post("/submit-data", async (req, res) => {
   }
 
   // need to creatr method generate unique id
-  const uniqueId = generateUniqueId(name, organization, id);
+  const uniqueId = generateUniqueId(user.name, user.organization, user.id);
 
   // Step 1: Validate the data
   const validation = await validateData(filePath);
   console.log(validation); // Call your Python validator
   if (validation.quality === "BAD") {
     // Call submitData with isValid = false
-    await penalizeUser(name, organization, uniqueId);
+    await penalizeUser(user.name, user.organization, user.uniqueId);
     return res.status(400).json({
       message: "Data validation failed",
       issues: validation.issues,
@@ -77,20 +92,20 @@ router.post("/submit-data", async (req, res) => {
 
   // Step 2: Upload to Pinata (IPFS)
   try {
-    //  const ipfsHash = await uploadFileToPinata(filePath, {
-    //   name: `${name}_${Date.now()}`,
-    //   keyvalues: {
-    //     userId: id,
-    //     organization: organization,
-    //     uniqueId: uniqueId,
-    //     validationStatus: "VALID"
-    //   }
-    // });
-    const ipfsHash = "QmValidHash"; // Replace with actual IPFS hash
+     const ipfsHash = await uploadFileToPinata(filePath, {
+      name: `${user.name}_${Date.now()}`,
+      keyvalues: {
+        userId: user.id,
+        organization: user.organization,
+        uniqueId: user.uniqueId,
+        validationStatus: "VALID"
+      }
+    });
+
 
     // Step 3: Save user details and IPFS hash in smart contract
     const tx = await contract.methods
-      .submitData(name, organization, uniqueId, ipfsHash)
+      .submitData(user.name, user.organization, uniqueId, ipfsHash)
       .send({
         from: process.env.CONTRACT_ADDRESS,
         gas: 3000000,
@@ -172,6 +187,7 @@ async function validateData(filePath) {
   });
 }
 
+// Web3 status endpoint
 router.get("/web3-status", async (req, res) => {
   try {
     const block = await web3.eth.getBlockNumber();
@@ -184,6 +200,74 @@ router.get("/web3-status", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ connected: false, error: error.message });
+  }
+});
+
+
+// Login endpoint
+router.post("/signup", async (req, res) => {
+  const { name, nationalId, email, password, organization, sector } = req.body;
+
+  // Validation (add password check)
+  if (!name || !nationalId || !email || !password || !organization || !sector) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO users 
+      (name, national_id, email, password, organization, sector)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      name, 
+      nationalId, 
+      email, 
+      hashedPassword, 
+      organization, 
+      sector
+    );
+    
+    res.status(201).json({
+      message: "User registered successfully",
+      userId: result.lastInsertRowid
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Find user by email
+    const user = db.prepare(`
+      SELECT * FROM users WHERE email = ?
+    `).get(email);
+
+    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+
+    // Verify password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) return res.status(401).json({ message: "Invalid credentials" });
+
+    // Generate JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ message: "Login failed" });
   }
 });
 
