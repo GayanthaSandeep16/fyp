@@ -30,6 +30,7 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+.env.local
 
 # Solidity generated files
 *.sol.js
