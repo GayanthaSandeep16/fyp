@@ -15,6 +15,8 @@ export default defineSchema({
 
 
 
+
+
   submissions: defineTable({
     userId: v.id("users"),
     dataHash: v.string(),

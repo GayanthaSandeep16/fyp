@@ -30,4 +30,6 @@ async function createUser(req, res) {
     }
 }
 
+
+// Export the function
 export default { createUser };
