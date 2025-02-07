@@ -1,8 +1,13 @@
-const fs = require("fs");
-const path = require("path");
-const { spawn } = require("child_process");
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 
-exports.saveFileToTemp = async (file) => {
+// __dirname is not available in ES Modules, so we define it manually
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const saveFileToTemp = async (file) => {
   return new Promise((resolve, reject) => {
     const tempDir = path.join(__dirname, "temp");
     if (!fs.existsSync(tempDir)) {
@@ -19,7 +24,7 @@ exports.saveFileToTemp = async (file) => {
   });
 };
 
-exports.validateData = (filePath) => {
+export const validateData = (filePath) => {
   return new Promise((resolve, reject) => {
     const pythonProcess = spawn("python", [
       "./dataValidator/dataValidator.py",
@@ -50,6 +55,6 @@ exports.validateData = (filePath) => {
   });
 };
 
-exports.generateUniqueId = (name, organization, id) => {
+export const generateUniqueId = (name, organization, id) => {
   return `${name}-${organization}-${id}`;
 };

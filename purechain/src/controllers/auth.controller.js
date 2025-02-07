@@ -12,26 +12,26 @@ exports.signUp = async (req, res) => {
     if (!name || !nationalId || !email || !password || !organization || !sector) {
       return res.status(400).json({ message: "Missing required fields" });
     }
-  
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-  
+
     try {
       const stmt = db.prepare(`
-        INSERT INTO users 
+        INSERT INTO users
         (name, national_id, email, password, organization, sector)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
-  
+
       const result = stmt.run(
-        name, 
-        nationalId, 
-        email, 
-        hashedPassword, 
-        organization, 
+        name,
+        nationalId,
+        email,
+        hashedPassword,
+        organization,
         sector
       );
-      
+
       res.status(201).json({
         message: "User registered successfully",
         userId: result.lastInsertRowid

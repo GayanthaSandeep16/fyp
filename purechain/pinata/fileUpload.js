@@ -1,24 +1,24 @@
-const pinataSDK = require("@pinata/sdk");
-const e = require("express");
-const fs = require("fs");
-const path = require("path");
-require("dotenv").config();
+import pinataSDK from "@pinata/sdk";
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
 
+dotenv.config();
 
 const { PINATA_API_KEY, PINATA_API_SECRET } = process.env;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-if (!PINATA_API_KEY || !PINATA_API_SECRET) {
-  console.error("Pinata API Key or Secret is missing. Check your .env file.");
-  process.exit(1);
-}
+// if (!PINATA_API_KEY || !PINATA_API_SECRET) {
+//   console.error("Pinata API Key or Secret is missing. Check your .env file.");
+//   process.exit(1);
+// }
 
 const pinata = new pinataSDK(PINATA_API_KEY, PINATA_API_SECRET);
 
-async function uploadFileToPinata(filePath, metadata = {}) {
+export async function uploadFileToPinata(filePath, metadata = {}) {
   try {
     if (!fs.existsSync(filePath)) {
-        throw new Error("File does not exist");
+      throw new Error("File does not exist");
     }
     const stats = fs.statSync(filePath);
 
@@ -50,10 +50,8 @@ async function uploadFileToPinata(filePath, metadata = {}) {
     console.log("Timestamp:", result.Timestamp);
 
     return result.IpfsHash;
-} catch (error) {
+  } catch (error) {
     console.error("Error uploading file to Pinata:", error.message || error);
     throw error instanceof Error ? error : new Error(error);
   }
 }
-
-module.exports = { uploadFileToPinata };

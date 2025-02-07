@@ -21,11 +21,9 @@ export const createUser = mutation({
     name: v.string(),
     national_id: v.string(),
     email: v.string(),
-    password: v.string(),
     organization: v.string(),
     sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
-    role: v.union(v.literal("Admin"), v.literal("User")),
-  },
+    role: v.union(v.literal("Admin"), v.literal("User")),  },
   handler: async (ctx, args) => {
     const userExists = await ctx.db
       .query("users")

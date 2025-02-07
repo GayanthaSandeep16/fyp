@@ -21,7 +21,7 @@ const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:7545');
 //   }
 // };
 
-exports.getWeb3Status = (req, res) => {
+export const getWeb3Status = (req, res) => {
     const web3 = new Web3(new Web3.providers.HttpProvider(process.env.WEB3_PROVIDER));
     web3.eth.net.isListening()
         .then(() => res.status(200).json({ status: 'Web3 is connected' }))
