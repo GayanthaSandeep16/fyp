@@ -1,6 +1,6 @@
 import express from 'express';
-// import { submitData } from './controllers/data.controller.js';
-// import web3Controller from './controllers/web3.controller.js';
+import { submitData } from './controllers/data.controller.js';
+import web3Controller from './controllers/web3.controller.js';
 import memberController from './controllers/member.controller.js';
 
 const router = express.Router();

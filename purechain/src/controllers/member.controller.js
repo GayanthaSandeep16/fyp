@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: ".env.local" });
 
-const client = new ConvexHttpClient(process.env["CONVEX_URL"]);
+const client = new ConvexHttpClient(process.env["CONVEX"]);
 import { api } from "../../convex/_generated/api.js";
 
 async function createUser(req, res) {
