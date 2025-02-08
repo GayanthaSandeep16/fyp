@@ -89,7 +89,7 @@ def validate_data(df):
         prediction = 0  # Fail-safe for invalid feature format
     
     return {
-        "quality": "GOOD" if (len(issues) == 0 and prediction == 1) else "BAD",
+        "quality": "VALID" if (len(issues) == 0 and prediction == 1) else "INVALID",
         "issues": issues,
         "stats": {
             "missing_pct": float(missing_pct),

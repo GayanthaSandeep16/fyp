@@ -14,9 +14,9 @@ export const getUserByClerkId = query({
   },
   handler: async (ctx, args) => {
     return await ctx.db
-        .query('users')
-        .withIndex('by_clerkUserId', (q) => q.eq('clerkUserId', args.clerkUserId))
-        .first();
+      .query('users')
+      .withIndex('by_clerkUserId', (q) => q.eq('clerkUserId', args.clerkUserId))
+      .first();
   },
 });
 
@@ -30,7 +30,7 @@ export const getUserByClerkId = query({
 // Create a new user
 export const createUser = mutation({
   args: {
-    clerk_id: v.string(),
+    clerkUserId: v.string(),
     name: v.string(),
     national_id: v.string(),
     email: v.string(),
@@ -39,10 +39,9 @@ export const createUser = mutation({
     role: v.union(v.literal("Admin"), v.literal("User")),
   },
   handler: async (ctx, args) => {
-    // ✅ Use the correct index name "by_clerk_id"
     const userExists = await ctx.db
         .query("users")
-        .withIndex("by_clerk_id", (q) => q.eq("clerk_id", args.clerk_id))
+        .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", args.clerkUserId))
         .first();
 
     if (userExists) {

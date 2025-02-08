@@ -7,10 +7,10 @@ const client = new ConvexHttpClient(process.env["CONVEX"]);
 import { api } from "../../convex/_generated/api.js";
 
 async function createUser(req, res) {
-    const { name, national_id, email, organization, sector,role, clerk_id } = req.body;
+    const { name, national_id, email, organization, sector,role, clerkUserId } = req.body;
 
 
-    if (!name || !national_id || !email  || !organization || !sector || !role || !clerk_id) {
+    if (!name || !national_id || !email  || !organization || !sector || !role || !clerkUserId) {
         return res.status(400).json({ error: "All fields are required." });
     }
 
@@ -22,7 +22,7 @@ async function createUser(req, res) {
             organization,
             sector,
             role,
-            clerk_id,
+            clerkUserId,
         });
 
         res.status(200).json({ userId, message: "User created successfully!" });
