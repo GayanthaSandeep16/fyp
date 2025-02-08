@@ -8,6 +8,18 @@ export const getUsers = query({
   },
 });
 
+export const getUserByClerkId = query({
+  args: {
+    clerkUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+        .query('users')
+        .withIndex('by_clerkUserId', (q) => q.eq('clerkUserId', args.clerkUserId))
+        .first();
+  },
+});
+
   // Get all admins
   export const getAdmins = query({
     handler: async (ctx) => {
@@ -18,20 +30,23 @@ export const getUsers = query({
 // Create a new user
 export const createUser = mutation({
   args: {
+    clerk_id: v.string(),
     name: v.string(),
     national_id: v.string(),
     email: v.string(),
     organization: v.string(),
     sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
-    role: v.union(v.literal("Admin"), v.literal("User")),  },
+    role: v.union(v.literal("Admin"), v.literal("User")),
+  },
   handler: async (ctx, args) => {
+    // ✅ Use the correct index name "by_clerk_id"
     const userExists = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
-      .first();
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerk_id", args.clerk_id))
+        .first();
 
     if (userExists) {
-      throw new Error("User with this email already exists!");
+      throw new Error("User with this Clerk ID already exists!");
     }
 
     return await ctx.db.insert("users", {
