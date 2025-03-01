@@ -23,7 +23,7 @@ export const getUserSubmissions = query({
 export const submitData = mutation({
   args: {
     userId: v.id("users"),
-    dataHash: v.string(), // This could be a unique hash or file reference
+    dataHash: v.optional(v.string()), // This could be a unique hash or file reference
     validationStatus: v.union(v.literal("VALID"), v.literal("INVALID")),
     validationIssues: v.optional(v.array(v.string())), // List of detected issues
     datasetName: v.string(),

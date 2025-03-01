@@ -8,7 +8,7 @@ import { api } from "../../convex/_generated/api.js";
 
 async function createUser(req, res) {
     const { name, national_id, email, organization, sector,role, clerkUserId } = req.body;
-
+console.log("Request body:", req.body); // Log the request body
 
     if (!name || !national_id || !email  || !organization || !sector || !role || !clerkUserId) {
         return res.status(400).json({ error: "All fields are required." });

@@ -8,10 +8,10 @@ dotenv.config();
 const { PINATA_API_KEY, PINATA_API_SECRET } = process.env;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-// if (!PINATA_API_KEY || !PINATA_API_SECRET) {
-//   console.error("Pinata API Key or Secret is missing. Check your .env file.");
-//   process.exit(1);
-// }
+if (!PINATA_API_KEY || !PINATA_API_SECRET) {
+  console.error("Pinata API Key or Secret is missing. Check your .env file.");
+  process.exit(1);
+}
 
 const pinata = new pinataSDK(PINATA_API_KEY, PINATA_API_SECRET);
 

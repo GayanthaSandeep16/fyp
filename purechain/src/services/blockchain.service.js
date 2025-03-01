@@ -1,12 +1,12 @@
 import Web3 from "web3"
-// import DataQualityArtifact from "../../build/contracts/DataQuality.json" assert { type: 'json' };
+import DataQualityArtifact from "../../build/contracts/DataQuality.json" assert { type: 'json' };
 const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:7545');
 
-// const contract = new web3.eth.Contract(
-//   DataQualityArtifact.abi,
-//   process.env.CONTRACT_ADDRESS,
-//   { from: process.env.ACCOUNT_ADDRESS }
-// );
+const contract = new web3.eth.Contract(
+  DataQualityArtifact.abi,
+  process.env.CONTRACT_ADDRESS,
+  { from: process.env.ACCOUNT_ADDRESS }
+);
 
 export const submitDataToContract = (name, organization, uniqueId, ipfsHash) => {
   return contract.methods

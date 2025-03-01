@@ -3,7 +3,7 @@ import { uploadFileToPinata } from "../../pinata/fileUpload.js";
 import {  penalizeUser,  submitDataToContract} from "../services/blockchain.service.js";
 import { successResponse, errorResponse } from "../utils/responseHandler.js";
 import { ConvexHttpClient } from "convex/browser";
-const convex = new ConvexHttpClient(process.env["CONVEX"]);
+const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 import { api } from "../../convex/_generated/api.js";
 
 const submitData = async (req, res) => {
@@ -57,7 +57,7 @@ const submitData = async (req, res) => {
       // Record invalid submission in Convex
       await convex.mutation(api.submissions.submitData, {
         userId: user._id,
-        dataHash: null, // No IPFS hash for invalid data
+        dataHash: "", // No IPFS hash for invalid data
         validationStatus: "INVALID",
         datasetName: file.name,
         sector: user.sector,
