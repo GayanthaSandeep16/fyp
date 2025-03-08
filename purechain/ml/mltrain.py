@@ -1,77 +1,46 @@
-import ipfshttpclient
+import sys
 import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import pickle
 
-# Connect to IPFS
-client = ipfshttpclient.connect()
+# Load the CSV file
+csv_path = sys.argv[1]
+df = pd.read_csv(csv_path)
 
-def fetch_dataset_from_ipfs(cid):
-    try:
-        # Fetch the file from IPFS
-        res = client.cat(cid)
-        # Load the CSV file into a pandas DataFrame
-        df = pd.read_csv(res)
-        return df
-    except Exception as e:
-        print(f"Error fetching dataset with CID {cid}: {e}")
-        return None
+# Preprocess inconsistent data
+def preprocess_data(df):
+    # Keep only numeric columns that exist in most rows (e.g., >80% non-null)
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    valid_cols = [col for col in numeric_cols if df[col].isna().mean() < 0.2]
+    df_numeric = df[valid_cols].dropna()  # Drop rows with NaN in these columns
 
+    # Fill any remaining NaN with column means (optional)
+    df_numeric = df_numeric.fillna(df_numeric.mean())
+    
+    print(f"Selected features: {valid_cols}")
+    print(f"Rows after preprocessing: {len(df_numeric)}")
+    return df_numeric
 
-        def clean_labels(datasets):
-    # Combine all datasets into one
-    combined_data = pd.concat(datasets)
-    # Perform majority voting on the 'Outcome' column
-    cleaned_labels = combined_data.groupby(combined_data.index).agg({
-        'Outcome': lambda x: x.mode()[0]  # Take the mode (majority vote)
-    })
-    return cleaned_labels
+# Prepare data
+X = preprocess_data(df)
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
+# Train K-Means (assuming 3 clusters: low, medium, high risk)
+kmeans = KMeans(n_clusters=3, random_state=42)
+kmeans.fit(X_scaled)
 
-    from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+# Save the model and scaler
+with open("kmeans_model.pkl", "wb") as f:
+    pickle.dump(kmeans, f)
+with open("scaler.pkl", "wb") as f:
+    pickle.dump(scaler, f)
 
-def train_model(datasets, cleaned_labels):
-    # Combine datasets into a single DataFrame
-    combined_data = pd.concat(datasets)
-    combined_data['Outcome'] = cleaned_labels['Outcome']
+# Assign clusters to data and save results
+df["Cluster"] = kmeans.predict(X_scaled)
+df.to_csv("clustered_data.csv", index=False)
 
-    # Split into features (X) and target (y)
-    X = combined_data.drop('Outcome', axis=1)
-    y = combined_data['Outcome']
-
-    # Split into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Train the model
-    model = RandomForestClassifier(random_state=42)
-    model.fit(X_train, y_train)
-
-    return model, X_test, y_test
-
-def evaluate_model(model, X_test, y_test):
-    accuracy = model.score(X_test, y_test)
-    print(f"Model Accuracy: {accuracy:.2f}")
-
-
-
-    def main():
-    # Step 1: Fetch datasets from IPFS
-    ipfs_cids = [
-        'QmExampleCID1',  # Replace with actual IPFS CIDs
-        'QmExampleCID2',
-        'QmExampleCID3'
-    ]
-    datasets = [fetch_dataset_from_ipfs(cid) for cid in ipfs_cids]
-    datasets = [df for df in datasets if df is not None]  # Filter out failed fetches
-
-    # Step 2: Clean labels
-    cleaned_labels = clean_labels(datasets)
-
-    # Step 3: Train the model
-    model, X_test, y_test = train_model(datasets, cleaned_labels)
-
-    # Step 4: Evaluate the model
-    evaluate_model(model, X_test, y_test)
-
-# Run the workflow
-if __name__ == "__main__":
-    main()
+print("K-Means training completed. Model saved as 'kmeans_model.pkl'.")
+print(f"Cluster counts:\n{df['Cluster'].value_counts()}")

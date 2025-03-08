@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LogisticRegression
 from scipy.stats import entropy
 import sys
 import json
@@ -46,48 +45,43 @@ def calculate_statistics(df):
     
     return stats
 
-# Step 3: ML Model Training (With model persistence)
+# Train Random Forest Model
 def train_ml_model():
     temp_dir = os.path.join(os.path.dirname(__file__), 'temp')
     os.makedirs(temp_dir, exist_ok=True)
-    
-    # Define model path
     model_path = os.path.join(temp_dir, 'trained_validator_model.pkl')
     
     if not os.path.exists(model_path):
+        # Expanded synthetic training data (more realistic)
         X = [
-            [5.0, 0, 0.0, 100],   # High outliers, zero entropy
-            [30.0, 20, 2.5, 15],  # Realistic scenario
-            [2.0, 0, 0.0, 50],    # No entropy, moderate outliers
-            [25.0, 15, 1.8, 10]   # Normal case
+            [5.0, 0, 0.0, 100],   # Good: Low issues
+            [30.0, 20, 2.5, 15],  # Bad: High missing & duplicates
+            [2.0, 0, 0.0, 50],    # Good: Low entropy, moderate outliers
+            [25.0, 15, 1.8, 10],  # Bad: High missing
+            [8.0, 5, 1.0, 20],    # Good: Balanced
+            [40.0, 30, 3.0, 5]    # Bad: Excessive issues
         ]
-        y = [1, 0, 1, 0]  # Adjust labels based on domain knowledge
+        y = [1, 0, 1, 0, 1, 0]  # 1 = VALID, 0 = INVALID
         
-        model = LogisticRegression()
+        model = RandomForestClassifier(n_estimators=50, random_state=42)
         model.fit(X, y)
         joblib.dump(model, model_path)
     
     return joblib.load(model_path)
 
-# Step 4: Validation Pipeline (Modified for JSON output)
+# Validation Pipeline
 def validate_data(df):
     issues, missing_pct, duplicates = rule_based_validation(df)
     stats = calculate_statistics(df)
     
-    # Handle empty entropy values
     entropy_values = [v for k, v in stats.items() if k.startswith('entropy')]
     avg_entropy = np.mean(entropy_values) if entropy_values else 0
-    
     total_outliers = sum([v for k, v in stats.items() if k.startswith('outliers')]) or 0
     
     model = train_ml_model()
     features = [missing_pct, duplicates, avg_entropy, total_outliers]
     
-    try:
-        prediction = model.predict([features])[0]
-    except:
-        prediction = 0  # Fail-safe for invalid feature format
-    
+    prediction = model.predict([features])[0]
     return {
         "quality": "VALID" if (len(issues) == 0 and prediction == 1) else "INVALID",
         "issues": issues,
@@ -99,12 +93,10 @@ def validate_data(df):
         }
     }
 
-# Step 5: Node.js Integration Entry Point (Added)
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print(json.dumps({"error": "Requires CSV file path as argument"}))
         sys.exit(1)
-        
     try:
         df = pd.read_csv(sys.argv[1])
         result = validate_data(df)
