@@ -1,7 +1,7 @@
-const axios = require("axios");
-const fs = require("fs");
+import axios from "axios";
+import fs from "fs";
 
-async function retrieveFileFromIPFS(ipfsHash) {
+ export async function retrieveFileFromIPFS(ipfsHash) {
   try {
     const gatewayURL = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
     const response = await axios.get(gatewayURL, { responseType: "stream" });
@@ -19,7 +19,7 @@ async function retrieveFileFromIPFS(ipfsHash) {
 }
 
 // Usage example:
-(async () => {
-  const ipfsHash = "QmPcWxNJ5ew598yKt7prXuE6phvEg8BB3PU4DppFsseiYD";
-  await retrieveFileFromIPFS(ipfsHash);
-})();
+// (async () => {
+//   const ipfsHash = "QmPcWxNJ5ew598yKt7prXuE6phvEg8BB3PU4DppFsseiYD";
+//   await retrieveFileFromIPFS(ipfsHash);
+// })();

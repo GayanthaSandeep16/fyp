@@ -19,6 +19,20 @@ export const getUserSubmissions = query({
   },
 });
 
+// Get all validated data
+export const getValidatedData = query({
+  args: {
+    quality: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const results = await ctx.db
+      .query("submissions")
+      .filter((q) => q.eq(q.field("validationStatus"), args.quality))
+      .collect();
+      return [...new Set(results.map(submission => submission.dataHash))];
+  },
+})
+
 // Submit new data
 export const submitData = mutation({
   args: {
