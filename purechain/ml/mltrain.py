@@ -21,10 +21,10 @@ def preprocess_data(df):
     
     print(f"Selected features: {valid_cols}")
     print(f"Rows after preprocessing: {len(df_numeric)}")
-    return df_numeric
+    return df_numeric, df.loc[df_numeric.index]  # Return filtered numeric data and corresponding original rows
 
 # Prepare data
-X = preprocess_data(df)
+X, df_filtered = preprocess_data(df)  # Get both numeric data and filtered original DataFrame
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
@@ -38,9 +38,9 @@ with open("kmeans_model.pkl", "wb") as f:
 with open("scaler.pkl", "wb") as f:
     pickle.dump(scaler, f)
 
-# Assign clusters to data and save results
-df["Cluster"] = kmeans.predict(X_scaled)
-df.to_csv("clustered_data.csv", index=False)
+# Assign clusters to the filtered data and save results
+df_filtered["Cluster"] = kmeans.predict(X_scaled)  # Assign clusters to filtered DataFrame
+df_filtered.to_csv("clustered_data.csv", index=False)
 
 print("K-Means training completed. Model saved as 'kmeans_model.pkl'.")
-print(f"Cluster counts:\n{df['Cluster'].value_counts()}")
+print(f"Cluster counts:\n{df_filtered['Cluster'].value_counts()}")

@@ -1,19 +1,20 @@
 import { retrieveFileFromIPFS } from "../../pinata/fileretriver.js";
 import { ConvexHttpClient } from "convex/browser";
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
-import { api } from "../../convex/_generated/api.js";
 
 
 export async function fetchAllValidData() {
   try {
-    const validatedData = await convex.query("getValidatedData", { quality: "VALID" });
+    const validatedData = await convex.query("submissions:getValidatedData", { quality: "VALID" });
     const allData = [];
+    console.log(validatedData);
+
     for (const entry of validatedData) {
-      const ipfsHash = entry.ipfsHash;
-      console.log(`Retrieving data from IPFS hash: ${ipfsHash}`);
-      const csvData = await retrieveFileFromIPFS(ipfsHash);
-      allData.push(...csvData);
+      console.log(`Retrieving data from IPFS hash: ${entry}`);
+      const csvData = await retrieveFileFromIPFS(entry);
+      allData.push(...csvData); // Spread the parsed CSV data into allData
     }
+
     return allData;
   } catch (error) {
     console.error("Error fetching valid data:", error);

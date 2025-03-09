@@ -1,5 +1,6 @@
 import {fetchAllValidData, dataToCsvString} from "../services/admin.service.js";
 import { spawn } from "child_process";
+import fs from "fs";
 
 const trainModel =  async (req, res) => {
     const authHeader = req.headers["authorization"];
