@@ -59,6 +59,7 @@ const submitData = async (req, res) => {
         userId: user._id,
         dataHash: "", // No IPFS hash for invalid data
         validationStatus: "INVALID",
+        validationIssues: validation.issues.join(", "),
         datasetName: file.name,
         sector: user.sector,
       });

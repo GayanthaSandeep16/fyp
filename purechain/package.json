@@ -21,6 +21,7 @@
     "express-fileupload": "^1.5.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.0",
     "pinata-web3": "^0.5.4",
     "react-dom": "^19.0.0",
     "solc": "^0.8.0",
