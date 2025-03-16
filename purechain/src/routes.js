@@ -9,6 +9,8 @@ const router = express.Router();
 router.post('/submit-data', submitData);
 router.post('/createUser', memberController.createUser);
 router.post ('/train', adminController.trainModel);
+router.get('/getInvalidUser', adminController.getInvalidUser);
+router.get('/getvalidUser', adminController.getvalidUser);
 router.get('/test', (req, res) => {
     res.send("Hello FYP");
 });
