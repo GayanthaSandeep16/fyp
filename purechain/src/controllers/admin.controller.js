@@ -1,9 +1,10 @@
-import {fetchAllValidData, dataToCsvString} from "../services/admin.service.js";
+import {fetchAllValidData, dataToCsvString , sendNotifications } from "../services/admin.service.js";
 import { ConvexHttpClient } from "convex/browser";
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
+import { api } from "../../convex/_generated/api.js";
 import { spawn } from "child_process";
 import fs from "fs";
-import { sendEmail } from "../utils/email.js";
+
 
 const trainModel = async (req, res) => {
   const authHeader = req.headers["authorization"];
@@ -29,7 +30,6 @@ const trainModel = async (req, res) => {
 
     pythonProcess.stdout.on("data", (data) => {
       console.log(`Python: ${data}`);
-      // Extract silhouette score from Python output (assuming it prints it)
       const match = data.toString().match(/Silhouette Score: ([\d.]+)/);
       if (match) silhouetteScore = match[1];
     });
@@ -43,28 +43,17 @@ const trainModel = async (req, res) => {
         return res.status(500).json({ error: "Failed to train model" });
       }
 
-      // Fetch valid and invalid users
       const validUsers = await convex.query("users:getvalidSubmissionsWithUsers");
       const invalidUsers = await convex.query("users:getInvalidSubmissionsWithUsers");
 
-      // Send emails to valid users
-      for (const submission of validUsers) {
-        const emailText = `Congratulations, ${submission.user.name}! Your data (${submission.datasetName}) was used to build an ML model. The model's silhouette score is ${silhouetteScore || "N/A"}. Thank you for contributing to our Purechain platform!`;
-        await sendEmail(submission.user.email, "Model Training Success", emailText);
-      }
-
-      // Send emails to invalid users
-      for (const submission of invalidUsers) {
-        const issues = submission.validationIssues || "Unknown issues"; // Adjust based on Convex schema
-        const emailText = `Sorry, ${submission.user.name}. Your data (${submission.datasetName}) didn’t meet our quality standards and wasn’t used in the model. Issues: ${issues}. Please improve and resubmit!`;
-        await sendEmail(submission.user.email, "Data Quality Notice", emailText);
-      }
+      const emailErrors = await sendNotifications(validUsers, invalidUsers, silhouetteScore);
 
       res.json({
         message: "K-Means model trained successfully",
         dataCount: allData.length,
         modelType: "KMeans",
         silhouetteScore: silhouetteScore || "N/A",
+        emailErrors: emailErrors.length > 0 ? emailErrors : undefined,
       });
     });
   } catch (error) {
@@ -116,5 +105,27 @@ const trainModel = async (req, res) => {
     }
 
   };
+
+  const getNotifications = async (req, res) => {
+    const authHeader = req.headers["authorization"];
+    if (authHeader !== "AdminSecret123") {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
   
-  export default { trainModel,getInvalidUser,getvalidUser };
+    try {
+      console.log("Fetching all notifications from Convex...");
+      const notifications = await convex.query("notification:getAllNotifications");
+  
+      if (notifications.length === 0) {
+        return res.status(400).json({ error: "No notifications found" });
+      }
+  
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error in /get-notifications endpoint:", error);
+      res.status(500).json({ error: "Failed to fetch notifications", details: error.message });
+    }
+  };
+  
+  export default { trainModel, getInvalidUser, getvalidUser, getNotifications };
+  

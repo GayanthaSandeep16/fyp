@@ -26,4 +26,13 @@ export default defineSchema({
     }).index("by_userId", ["userId"])
         .index("by_sector", ["sector"])
         .index("by_status", ["validationStatus"]),
+
+    notifications: defineTable({
+        userId: v.id("users"),
+        email: v.string(),
+        subject: v.string(),
+        status: v.string(), // "success" or "failed"
+        errorMessage: v.optional(v.string()),
+        timestamp: v.number(), // Unix timestamp (milliseconds)
+        }).index("by_timestamp", ["timestamp"]),
 });
