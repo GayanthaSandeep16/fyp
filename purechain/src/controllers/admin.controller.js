@@ -1,11 +1,11 @@
-import {fetchAllValidData, dataToCsvString , sendNotifications } from "../services/admin.service.js";
+import { fetchAllValidData, sendNotifications, dataToCsvString } from "../services/admin.service.js";
 import { ConvexHttpClient } from "convex/browser";
-const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
-import { api } from "../../convex/_generated/api.js";
 import { spawn } from "child_process";
 import fs from "fs";
 
+const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 
+// use this endpoint to train the model
 const trainModel = async (req, res) => {
   const authHeader = req.headers["authorization"];
   if (authHeader !== "AdminSecret123") {
@@ -62,70 +62,70 @@ const trainModel = async (req, res) => {
   }
 };
 
-  const getInvalidUser = async (req, res) => {
-    const authHeader = req.headers["authorization"];
-    if (authHeader !== "AdminSecret123") {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-  
-    try {
-      console.log("Fetching all invalid data from Convex" );
-      const allData = await convex.query("users:getInvalidSubmissionsWithUsers");
-  
-      if (allData.length === 0) {
-        return res.status(400).json({ error: "No invalid data found" });
-      }
-  
-      res.json(allData);
-    } catch (error) {
-      console.error("Error in /get-invalid-data endpoint:", error);
-      res.status(500).json({ error: "Failed to fetch invalid data", details: error.message });
+const getInvalidUser = async (req, res) => {
+  const authHeader = req.headers["authorization"];
+  if (authHeader !== "AdminSecret123") {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  try {
+    console.log("Fetching all invalid data from Convex" );
+    const allData = await convex.query("users:getInvalidSubmissionsWithUsers");
+
+    if (allData.length === 0) {
+      return res.status(400).json({ error: "No invalid data found" });
     }
 
-  };
+    res.json(allData);
+  } catch (error) {
+    console.error("Error in /get-invalid-data endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch invalid data", details: error.message });
+  }
 
-  const getvalidUser = async (req, res) => {
-    const authHeader = req.headers["authorization"];
-    if (authHeader !== "AdminSecret123") {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-  
-    try {
-      console.log("Fetching all invalid data from Convex" );
-      const allData = await convex.query("users:getvalidSubmissionsWithUsers");
-  
-      if (allData.length === 0) {
-        return res.status(400).json({ error: "No invalid data found" });
-      }
-  
-      res.json(allData);
-    } catch (error) {
-      console.error("Error in /get-invalid-data endpoint:", error);
-      res.status(500).json({ error: "Failed to fetch invalid data", details: error.message });
+};
+
+const getvalidUser = async (req, res) => {
+  const authHeader = req.headers["authorization"];
+  if (authHeader !== "AdminSecret123") {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  try {
+    console.log("Fetching all invalid data from Convex" );
+    const allData = await convex.query("users:getvalidSubmissionsWithUsers");
+
+    if (allData.length === 0) {
+      return res.status(400).json({ error: "No invalid data found" });
     }
 
-  };
+    res.json(allData);
+  } catch (error) {
+    console.error("Error in /get-invalid-data endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch invalid data", details: error.message });
+  }
 
-  const getNotifications = async (req, res) => {
-    const authHeader = req.headers["authorization"];
-    if (authHeader !== "AdminSecret123") {
-      return res.status(403).json({ error: "Unauthorized" });
+};
+
+const getNotifications = async (req, res) => {
+  const authHeader = req.headers["authorization"];
+  if (authHeader !== "AdminSecret123") {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  try {
+    console.log("Fetching all notifications from Convex...");
+    const notifications = await convex.query("notification:getAllNotifications");
+
+    if (notifications.length === 0) {
+      return res.status(400).json({ error: "No notifications found" });
     }
-  
-    try {
-      console.log("Fetching all notifications from Convex...");
-      const notifications = await convex.query("notification:getAllNotifications");
-  
-      if (notifications.length === 0) {
-        return res.status(400).json({ error: "No notifications found" });
-      }
-  
-      res.json(notifications);
-    } catch (error) {
-      console.error("Error in /get-notifications endpoint:", error);
-      res.status(500).json({ error: "Failed to fetch notifications", details: error.message });
-    }
-  };
-  
-  export default { trainModel, getInvalidUser, getvalidUser, getNotifications };
+
+    res.json(notifications);
+  } catch (error) {
+    console.error("Error in /get-notifications endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch notifications", details: error.message });
+  }
+};
+
+export default { trainModel, getInvalidUser, getvalidUser, getNotifications };
   

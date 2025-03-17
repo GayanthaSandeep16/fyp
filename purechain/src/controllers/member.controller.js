@@ -6,6 +6,7 @@ dotenv.config({ path: ".env.local" });
 const client = new ConvexHttpClient(process.env["CONVEX"]);
 import { api } from "../../convex/_generated/api.js";
 
+// this funaction is used to create a user (role: member) in the system
 async function createUser(req, res) {
     const { name, national_id, email, organization, sector,role, clerkUserId } = req.body;
 console.log("Request body:", req.body); // Log the request body

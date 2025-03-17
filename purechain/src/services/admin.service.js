@@ -1,9 +1,10 @@
 import { retrieveFileFromIPFS } from "../../pinata/fileretriver.js";
 import { ConvexHttpClient } from "convex/browser";
-const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 import { sendEmail } from "../utils/email.js";
 
+const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 
+// Fetch all valid data from Convex
 async function fetchAllValidData() {
   try {
     const validatedData = await convex.query("submissions:getValidatedData", { quality: "VALID" });
@@ -13,7 +14,7 @@ async function fetchAllValidData() {
     for (const entry of validatedData) {
       console.log(`Retrieving data from IPFS hash: ${entry}`);
       const csvData = await retrieveFileFromIPFS(entry);
-      allData.push(...csvData); // Spread the parsed CSV data into allData
+      allData.push(...csvData);
     }
 
     return allData;
@@ -30,6 +31,7 @@ async function dataToCsvString(data) {
   return [headers.join(","), ...rows].join("\n");
 }
 
+// Send notifications to users
 async function sendNotifications(validUsers, invalidUsers, silhouetteScore) {
   let emailErrors = [];
 
@@ -91,4 +93,4 @@ async function sendNotifications(validUsers, invalidUsers, silhouetteScore) {
   return emailErrors;
 }
 
-module.exports = { sendNotifications,dataToCsvString,fetchAllValidData };
+export { fetchAllValidData, dataToCsvString, sendNotifications }; // Changed to ES6 export
