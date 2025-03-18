@@ -5,15 +5,14 @@ export default defineSchema({
     users: defineTable({
         clerkUserId: v.string(),
         name: v.string(),
-        national_id: v.string(),
         email: v.string(),
         organization: v.string(),
+        walletAddress: v.string(),
         sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
         created_at: v.optional(v.number()), // Store as timestamp
         role: v.union(v.literal("Admin"), v.literal("User"))
     }).index("by_email", ["email"])
-        .index("by_clerkUserId", ["clerkUserId"])
-        .index("by_national_id", ["national_id"]),
+        .index("by_clerkUserId", ["clerkUserId"]),
 
     submissions: defineTable({
         userId: v.id("users"),

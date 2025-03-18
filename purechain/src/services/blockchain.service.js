@@ -1,29 +1,89 @@
-import Web3 from "web3"
-import DataQualityArtifact from "../../build/contracts/DataQuality.json" with { type: 'json' };
-const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:7585');
+import Web3 from "web3";
+import DataQualityArtifact from "../../build/contracts/DataQuality.json" with { type: "json" };
+import { successResponse, errorResponse } from "../utils/responseHandler.js"; // Assuming this exists
+
+const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:7585");
 
 const contract = new web3.eth.Contract(
   DataQualityArtifact.abi,
-  process.env.CONTRACT_ADDRESS,
-  { from: process.env.ACCOUNT_ADDRESS }
+  process.env.CONTRACT_ADDRESS // This is correct as the contract address
 );
 
+// Submit data to the contract using the user's wallet address
+export const submitDataToContract = async (name, organization, uniqueId, ipfsHash, walletAddress) => {
+  try {
+    if (!web3.utils.isAddress(walletAddress)) {
+      throw new Error("Invalid wallet address");
+    }
 
-//this 
-export const submitDataToContract = (name, organization, uniqueId, ipfsHash) => {
-  return contract.methods
-    .submitData(name, organization, uniqueId, ipfsHash)
-    .send({
-      from: process.env.CONTRACT_ADDRESS,
-      gas: 3000000,
-    });
+    const tx = await contract.methods
+      .submitData(name, organization, uniqueId, ipfsHash)
+      .send({
+        from: walletAddress, // Use the user's wallet address
+        gas: 3000000,
+      });
+
+    return tx;
+  } catch (error) {
+    throw new Error(`Blockchain submission failed: ${error.message}`);
+  }
 };
 
-export const penalizeUser = (uniqueId) => {
-  return contract.methods
-    .penalizeUser(uniqueId)
-    .send({
-      from: process.env.ACCOUNT_ADDRESS,
-      gas: 3000000,
-    });
+// Penalize a user using their wallet address
+export const penalizeUser = async (uniqueId, walletAddress) => {
+  try {
+    if (!web3.utils.isAddress(walletAddress)) {
+      throw new Error("Invalid wallet address");
+    }
+
+    const tx = await contract.methods
+      .penalizeUser(uniqueId)
+      .send({
+        from: walletAddress, // Use the user's wallet address
+        gas: 3000000,
+      });
+
+    return tx;
+  } catch (error) {
+    throw new Error(`Penalization failed: ${error.message}`);
+  }
+};
+
+// Get the reputation of a user
+export const getReputation = async (req, res) => {
+  const { walletAddress } = req.body;
+
+  try {
+    if (!web3.utils.isAddress(walletAddress)) {
+      return errorResponse(res, "Invalid wallet address", 400);
+    }
+
+    // Call getReputation using the user's wallet address
+    const reputation = await contract.methods.getReputation().call({ from: walletAddress });
+
+    successResponse(res, { walletAddress, reputation });
+  } catch (error) {
+    errorResponse(res, `Failed to fetch reputation: ${error.message}`, 500);
+  }
+};
+
+// Optional: Get full user details (for debugging or UI)
+export const getUserDetails = async (walletAddress) => {
+  try {
+    if (!web3.utils.isAddress(walletAddress)) {
+      throw new Error("Invalid wallet address");
+    }
+
+    const userData = await contract.methods.getUserByAddress(walletAddress).call();
+    return {
+      name: userData[0],
+      organization: userData[1],
+      uniqueId: userData[2],
+      reputation: userData[3],
+      isBlacklisted: userData[4],
+      submissionCount: userData[5],
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch user details: ${error.message}`);
+  }
 };
