@@ -2,6 +2,7 @@ import {generateUniqueId,  saveFileToTemp,  validateData,} from "../services/fil
 import { uploadFileToPinata } from "../../pinata/fileUpload.js";
 import {  penalizeUser,  submitDataToContract} from "../services/blockchain.service.js";
 import { successResponse, errorResponse } from "../utils/responseHandler.js";
+import { getModelDetails } from "../services/model.service.js";
 import { ConvexHttpClient } from "convex/browser";
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 import { api } from "../../convex/_generated/api.js";
@@ -54,7 +55,7 @@ const submitData = async (req, res) => {
 
     // Submit to blockchain with walletAddress
     const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
-    
+
     await convex.mutation(api.submissions.submitData, {
       userId: user._id,
       dataHash: ipfsHash,
@@ -77,5 +78,15 @@ const submitData = async (req, res) => {
   }
 };
 
+// controllers/mlController.js
+const getModelHistoryDetails = async (req, res) => {
+  try {
+    const models = await getModelDetails();
+    res.json({ success: true, data: models });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch model history", details: error.message });
+  }
+};
 
-export { submitData };
+
+export { submitData , getModelHistoryDetails };

@@ -1,5 +1,5 @@
 import express from 'express';
-import { submitData } from './controllers/data.controller.js';
+import { submitData, getModelHistoryDetails } from './controllers/data.controller.js';
 import { getWeb3Status, getReputation,checkTransaction,checkBlacklistStatus} from './controllers/web3.controller.js';
 import memberController from './controllers/member.controller.js';
 import adminController from './controllers/admin.controller.js';
@@ -15,6 +15,7 @@ router.get('/getNotifications', adminController.getNotifications)
 router.get('/getReputation', getReputation);
 router.get('/checkTransaction', checkTransaction);
 router.post('/check-blacklist', checkBlacklistStatus);
+router.get('/getModelHistory', getModelHistoryDetails);
 
 router.get('/test', (req, res) => {
     res.send("Hello FYP");

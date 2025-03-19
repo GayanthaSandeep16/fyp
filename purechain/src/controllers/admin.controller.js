@@ -42,6 +42,13 @@ const trainModel = async (req, res) => {
       if (code !== 0) {
         return res.status(500).json({ error: "Failed to train model" });
       }
+      
+      const modelId = await convex.mutation(api.models.saveModelDetails, {
+        dataCount: allData.length,
+        modelType: "KMeans",
+        silhouetteScore: silhouetteScore || "N/A",
+        status: "success",
+      });
 
       const validUsers = await convex.query("users:getvalidSubmissionsWithUsers");
       const invalidUsers = await convex.query("users:getInvalidSubmissionsWithUsers");
@@ -50,6 +57,7 @@ const trainModel = async (req, res) => {
 
       res.json({
         message: "K-Means model trained successfully",
+        modelId,
         dataCount: allData.length,
         modelType: "KMeans",
         silhouetteScore: silhouetteScore || "N/A",
