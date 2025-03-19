@@ -61,7 +61,7 @@ export const getReputationService = async (walletAddress) => {
   }
 };
 
-// Optional: Get full user details (for debugging or UI)
+//Get full user details using wallet address
 export const getUserDetails = async (walletAddress) => {
   try {
     if (!web3.utils.isAddress(walletAddress)) {
@@ -79,5 +79,69 @@ export const getUserDetails = async (walletAddress) => {
     };
   } catch (error) {
     throw new Error(`Failed to fetch user details: ${error.message}`);
+  }
+};
+
+// get transaction details using transaction hash using this try to get the transaction details and show in ui
+export const getTransactionDetails = async (txHash) => {
+  try {
+    const receipt = await web3.eth.getTransactionReceipt(txHash);
+    if (!receipt) {
+      throw new Error("Transaction not found or not yet mined");
+    }
+
+    const tx = await web3.eth.getTransaction(txHash);
+
+    const eventABIs = DataQualityArtifact.abi.filter(e => e.type === "event");
+
+    const decodedLogs = receipt.logs.map(log => {
+      console.log("Log topics:", log.topics);
+      try {
+        const eventABI = eventABIs.find(e => 
+          web3.utils.keccak256(`${e.name}(${e.inputs.map(i => i.type).join(",")})`) === log.topics[0]
+        );
+        if (!eventABI) {
+          console.log(`No matching ABI for topic: ${log.topics[0]}`);
+          return null;
+        }
+
+        const decoded = web3.eth.abi.decodeLog(
+          eventABI.inputs,
+          log.data,
+          log.topics.slice(1)
+        );
+
+        // Convert BigInt values in returnValues to strings
+        const returnValues = {};
+        for (const [key, value] of Object.entries(decoded)) {
+          returnValues[key] = (typeof value === 'bigint') ? value.toString() : value;
+        }
+
+        return {
+          event: eventABI.name,
+          returnValues
+        };
+      } catch (e) {
+        console.error("Decoding error:", e.message);
+        return null;
+      }
+    }).filter(log => log !== null);
+
+    console.log("Decoded logs:", decodedLogs);
+
+    return {
+      transactionHash: txHash,
+      blockNumber: receipt.blockNumber.toString(),
+      from: tx.from,
+      to: tx.to,
+      gasUsed: receipt.gasUsed.toString(),
+      status: receipt.status ? "Success" : "Failed",
+      events: decodedLogs.map(log => ({
+        name: log.event,
+        args: log.returnValues
+      }))
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch transaction details: ${error.message}`);
   }
 };

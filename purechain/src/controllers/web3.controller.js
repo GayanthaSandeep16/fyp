@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '../utils/responseHandler.js';
 import { 
   submitDataToContract,
   penalizeUser,
+  getTransactionDetails,
   getReputationService,
   getUserDetails 
 } from '../services/blockchain.service.js';
@@ -76,4 +77,29 @@ export const fetchUserDetails = async (req, res) => {
   } catch (error) {
     errorResponse(res, `Failed to fetch user details: ${error.message}`, 500);
   }
+};
+
+//check transaction 
+export const checkTransaction = async (req, res) => {
+  const { txHash } = req.body;
+
+try {
+    if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
+      return errorResponse(res, 'Valid transaction hash is required', 400);
+    }
+   
+    const details = await getTransactionDetails(txHash);
+    
+    successResponse(res, {
+      message: `Transaction successful in block #${details.blockNumber}`,
+      transactionHash: details.transactionHash,
+      from: details.from,
+      status: details.status,
+      events: details.events,
+      gasUsed: details.gasUsed
+    });
+  } catch (error) {
+    errorResponse(res, error.message, 500);
+  }
+
 };
