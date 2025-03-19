@@ -101,5 +101,23 @@ try {
   } catch (error) {
     errorResponse(res, error.message, 500);
   }
-
 };
+
+  export const checkBlacklistStatus = async (req, res) => {
+    const { walletAddress } = req.body;
+  
+    try {
+      if (!web3.utils.isAddress(walletAddress)) {
+        return errorResponse(res, 'Valid wallet address is required', 400);
+      }
+  
+      const isBlacklisted = await isUserBlacklisted(walletAddress);
+      successResponse(res, {
+        walletAddress,
+        isBlacklisted
+      });
+    } catch (error) {
+      errorResponse(res, error.message, 500);
+    }
+  };
+
