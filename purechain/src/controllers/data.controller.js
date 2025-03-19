@@ -51,11 +51,12 @@ const submitData = async (req, res) => {
     });
 
     await convex.mutation(api.submissions.submitData, {
-      userId: walletAddress,
+      userId: user._id,
       dataHash: ipfsHash,
       validationStatus: validation.quality,
       datasetName: file.name,
       sector: user.sector,
+      walletAddress: walletAddress,
     });
 
     // Submit to blockchain with walletAddress

@@ -79,7 +79,7 @@ export const createUser = mutation({
   args: {
     clerkUserId: v.string(),
     name: v.string(),
-    national_id: v.string(),
+    walletAddress: v.string(),
     email: v.string(),
     organization: v.string(),
     sector: v.string(),

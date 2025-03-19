@@ -15,7 +15,7 @@ async function createUser(req, res) {
   
     try {
       const userId = await client.mutation(api.users.createUser, {
-        name, national_id, email, organization, sector, role, clerkUserId, walletAddress
+        name, email, organization, sector, role, clerkUserId, walletAddress
       });
       res.status(200).json({ userId, message: "User created successfully!" });
     } catch (error) {

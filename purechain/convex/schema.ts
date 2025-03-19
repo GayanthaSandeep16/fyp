@@ -21,6 +21,7 @@ export default defineSchema({
         validationIssues: v.optional(v.array(v.string())),
         datasetName: v.string(),
         sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
+        walletAddress: v.string(),
         submittedAt: v.number(), // Store as timestamp
     }).index("by_userId", ["userId"])
         .index("by_sector", ["sector"])

@@ -1,8 +1,7 @@
 import Web3 from "web3";
 import DataQualityArtifact from "../../build/contracts/DataQuality.json" with { type: "json" };
-import { successResponse, errorResponse } from "../utils/responseHandler.js"; // Assuming this exists
 
-const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:7585");
+const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:8545");
 
 const contract = new web3.eth.Contract(
   DataQualityArtifact.abi,
@@ -39,7 +38,7 @@ export const penalizeUser = async (uniqueId, walletAddress) => {
     const tx = await contract.methods
       .penalizeUser(uniqueId)
       .send({
-        from: walletAddress, // Use the user's wallet address
+        from: walletAddress, 
         gas: 3000000,
       });
 
@@ -50,20 +49,15 @@ export const penalizeUser = async (uniqueId, walletAddress) => {
 };
 
 // Get the reputation of a user
-export const getReputation = async (req, res) => {
-  const { walletAddress } = req.body;
-
+export const getReputationService = async (walletAddress) => {
   try {
     if (!web3.utils.isAddress(walletAddress)) {
-      return errorResponse(res, "Invalid wallet address", 400);
+      throw new Error("Invalid wallet address");
     }
-
-    // Call getReputation using the user's wallet address
     const reputation = await contract.methods.getReputation().call({ from: walletAddress });
-
-    successResponse(res, { walletAddress, reputation });
+    return { walletAddress, reputation };
   } catch (error) {
-    errorResponse(res, `Failed to fetch reputation: ${error.message}`, 500);
+    throw new Error(`Failed to fetch reputation: ${error.message}`);
   }
 };
 
