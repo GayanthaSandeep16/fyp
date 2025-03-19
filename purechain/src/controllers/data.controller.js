@@ -33,13 +33,15 @@ const submitData = async (req, res) => {
     const validation = await validateData(filePath);
 
     if (validation.quality === "INVALID") {
-      await penalizeUser(user.name, user.organization, uniqueId, walletAddress); // Pass walletAddress
+      const vx = await penalizeUser(user.name, user.organization, uniqueId, walletAddress);
       await convex.mutation(api.submissions.submitData, {
-        userId: walletAddress,
+        userId: user._id,
         dataHash: "",
         validationStatus: "INVALID",
         validationIssues: validation.issues.join(", "),
         datasetName: file.name,
+        transactionHash: vx.transactionHash,
+        walletAddress: walletAddress,
         sector: user.sector,
       });
       return res.status(400).json({ message: "Data validation failed", issues: validation.issues });
@@ -50,23 +52,24 @@ const submitData = async (req, res) => {
       keyvalues: { userId: walletAddress, organization: user.organization, uniqueId, validationStatus: validation.quality },
     });
 
+    // Submit to blockchain with walletAddress
+    const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
+    
     await convex.mutation(api.submissions.submitData, {
       userId: user._id,
       dataHash: ipfsHash,
       validationStatus: validation.quality,
       datasetName: file.name,
       sector: user.sector,
+      transactionHash: tx.transactionHash,
       walletAddress: walletAddress,
     });
-
-    // Submit to blockchain with walletAddress
-    const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
 
     successResponse(res, {
       message: "Data submitted successfully",
       ipfsHash,
       transactionHash: tx.transactionHash,
-      walletAddress, // Return for confirmation
+      walletAddress, 
     });
   } catch (error) {
     console.error("Data submission error:", error);

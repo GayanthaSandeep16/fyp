@@ -39,6 +39,7 @@ export const submitData = mutation({
     validationStatus: v.union(v.literal("VALID"), v.literal("INVALID")),
     validationIssues: v.optional(v.array(v.string())), // List of detected issues
     datasetName: v.string(),
+    transactionHash: v.optional(v.string()),
     walletAddress: v.string(),
     sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
   },
