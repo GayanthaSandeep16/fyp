@@ -5,7 +5,6 @@ import fs from "fs";
 
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 
-// use this endpoint to train the model
 const trainModel = async (req, res) => {
   const authHeader = req.headers["authorization"];
   if (authHeader !== "AdminSecret123") {
@@ -15,44 +14,55 @@ const trainModel = async (req, res) => {
   try {
     console.log("Fetching all valid data from Convex and Pinata...");
     const allData = await fetchAllValidData();
-
     if (allData.length === 0) {
       return res.status(400).json({ error: "No valid data found to train on" });
     }
 
-    const csvString = dataToCsvString(allData);
+    const csvString = await dataToCsvString(allData);
     const tempFilePath = "./temp_data.csv";
     fs.writeFileSync(tempFilePath, csvString);
-    console.log(`Data saved to ${tempFilePath}`);
 
+    // Use Random Forest script instead of K-means
     const pythonProcess = spawn("python3", ["./ml/mltrain.py", tempFilePath]);
-    let silhouetteScore = null;
+    let metrics = { accuracy: null, f1Score: null };
 
     pythonProcess.stdout.on("data", (data) => {
-      console.log(`Python: ${data}`);
-      const match = data.toString().match(/Silhouette Score: ([\d.]+)/);
-      if (match) silhouetteScore = match[1];
+      const str = data.toString();
+      console.log(`Python: ${str}`);
+      if (str.match(/Accuracy: ([\d.]+)/)) metrics.accuracy = parseFloat(str.match(/Accuracy: ([\d.]+)/)[1]);
+      if (str.match(/F1 Score: ([\d.]+)/)) metrics.f1Score = parseFloat(str.match(/F1 Score: ([\d.]+)/)[1]);
+      if (str.match(/Precision: ([\d.]+)/)) metrics.precision = parseFloat(str.match(/Precision: ([\d.]+)/)[1]);
+      if (str.match(/Recall: ([\d.]+)/)) metrics.recall = parseFloat(str.match(/Recall: ([\d.]+)/)[1]);
     });
     pythonProcess.stderr.on("data", (data) => console.error(`Python Error: ${data}`));
 
     pythonProcess.on("close", async (code) => {
-      console.log(`Python script exited with code ${code}`);
       fs.unlinkSync(tempFilePath);
-
       if (code !== 0) {
         return res.status(500).json({ error: "Failed to train model" });
       }
 
+      const modelId = await convex.mutation("model:saveModelDetails", {
+        dataCount: allData.length,
+        modelType: "RandomForest",
+        accuracy: metrics.accuracy !== null ? metrics.accuracy.toString() : "N/A",
+        f1Score: metrics.f1Score !== null ? metrics.f1Score.toString() : "N/A",
+        precision: metrics.precision !== null ? metrics.precision.toString() : "N/A",
+        recall: metrics.recall !== null ? metrics.recall.toString() : "N/A",
+        status: "success",
+      });
+
       const validUsers = await convex.query("users:getvalidSubmissionsWithUsers");
       const invalidUsers = await convex.query("users:getInvalidSubmissionsWithUsers");
-
-      const emailErrors = await sendNotifications(validUsers, invalidUsers, silhouetteScore);
+      const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics.f1Score);
 
       res.json({
-        message: "K-Means model trained successfully",
+        message: "RandomForest model trained successfully",
+        modelId,
         dataCount: allData.length,
-        modelType: "KMeans",
-        silhouetteScore: silhouetteScore || "N/A",
+        modelType: "RandomForest",
+        accuracy: metrics.accuracy || "N/A",
+        f1Score: metrics.f1Score || "N/A",
         emailErrors: emailErrors.length > 0 ? emailErrors : undefined,
       });
     });
@@ -62,6 +72,7 @@ const trainModel = async (req, res) => {
   }
 };
 
+// Other endpoints unchanged
 const getInvalidUser = async (req, res) => {
   const authHeader = req.headers["authorization"];
   if (authHeader !== "AdminSecret123") {
@@ -69,7 +80,7 @@ const getInvalidUser = async (req, res) => {
   }
 
   try {
-    console.log("Fetching all invalid data from Convex" );
+    console.log("Fetching all invalid data from Convex");
     const allData = await convex.query("users:getInvalidSubmissionsWithUsers");
 
     if (allData.length === 0) {
@@ -81,7 +92,6 @@ const getInvalidUser = async (req, res) => {
     console.error("Error in /get-invalid-data endpoint:", error);
     res.status(500).json({ error: "Failed to fetch invalid data", details: error.message });
   }
-
 };
 
 const getvalidUser = async (req, res) => {
@@ -91,19 +101,18 @@ const getvalidUser = async (req, res) => {
   }
 
   try {
-    console.log("Fetching all invalid data from Convex" );
+    console.log("Fetching all valid data from Convex");
     const allData = await convex.query("users:getvalidSubmissionsWithUsers");
 
     if (allData.length === 0) {
-      return res.status(400).json({ error: "No invalid data found" });
+      return res.status(400).json({ error: "No valid data found" });
     }
 
     res.json(allData);
   } catch (error) {
-    console.error("Error in /get-invalid-data endpoint:", error);
-    res.status(500).json({ error: "Failed to fetch invalid data", details: error.message });
+    console.error("Error in /get-valid-data endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch valid data", details: error.message });
   }
-
 };
 
 const getNotifications = async (req, res) => {
@@ -128,4 +137,3 @@ const getNotifications = async (req, res) => {
 };
 
 export default { trainModel, getInvalidUser, getvalidUser, getNotifications };
-  

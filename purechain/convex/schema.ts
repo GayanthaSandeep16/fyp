@@ -36,4 +36,15 @@ export default defineSchema({
         errorMessage: v.optional(v.string()),
         timestamp: v.number(), // Unix timestamp (milliseconds)
         }).index("by_timestamp", ["timestamp"]),
+
+        models: defineTable({
+            timestamp: v.number(),          
+            dataCount: v.number(),          
+            modelType: v.string(),         
+            accuracy: v.string(),          
+            f1Score: v.string(),           
+            precision: v.string(),         
+            recall: v.string(),            
+            status: v.string(),            
+          }),
 });
