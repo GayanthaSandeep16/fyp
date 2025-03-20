@@ -2,6 +2,7 @@ import { generateUniqueId, saveFileToTemp, validateData } from "../services/file
 import { uploadFileToPinata } from "../../pinata/fileUpload.js";
 import { penalizeUser, submitDataToContract, getReputationService } from "../services/blockchain.service.js";
 import { successResponse, errorResponse } from "../utils/responseHandler.js";
+import { getModelDetails } from "../services/model.service.js";
 import { ConvexHttpClient } from "convex/browser";
 import fs from "fs/promises";
 import path from "path";

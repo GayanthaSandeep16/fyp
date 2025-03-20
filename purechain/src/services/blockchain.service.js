@@ -61,6 +61,18 @@ export const getReputationService = async (walletAddress) => {
   }
 };
 
+export const isUserBlacklisted = async (walletAddress) => {
+  try {
+    if (!web3.utils.isAddress(walletAddress)) {
+      throw new Error("Invalid wallet address");
+    }
+    const userDetails = await contract.methods.getUserByAddress(walletAddress).call();
+    return userDetails[4];
+  } catch (error) {
+    throw new Error(`Failed to check blacklist status: ${error.message}`);
+  }
+};
+
 //Get full user details using wallet address
 export const getUserDetails = async (walletAddress) => {
   try {
