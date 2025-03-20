@@ -3,6 +3,7 @@ import express from 'express';
 import fileUpload from 'express-fileupload';
 import routes from './src/routes.js';
 import cors from 'cors';
+import { cleanupTempDir } from './src/utils/cleanup.js';
 
 dotenv.config();
 
@@ -34,3 +35,5 @@ app.use((err, req, res, next) => {
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
+
+setInterval(cleanupTempDir, 60 * 60 * 1000);

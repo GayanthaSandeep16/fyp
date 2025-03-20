@@ -2,6 +2,7 @@ import pinataSDK from "@pinata/sdk";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import retry from 'async-retry';
 
 dotenv.config();
 
@@ -16,42 +17,53 @@ if (!PINATA_API_KEY || !PINATA_API_SECRET) {
 const pinata = new pinataSDK(PINATA_API_KEY, PINATA_API_SECRET);
 
 export async function uploadFileToPinata(filePath, metadata = {}) {
-  try {
-    if (!fs.existsSync(filePath)) {
-      throw new Error("File does not exist");
+  return await retry(
+    async () => {
+      try {
+        if (!fs.existsSync(filePath)) {
+          throw new Error("File does not exist");
+        }
+        const stats = fs.statSync(filePath);
+
+        if (stats.size > MAX_FILE_SIZE) {
+          throw new Error("File size exceeds 10MB limit");
+        }
+
+        if (!/\.(csv|json|txt)$/i.test(filePath)) {
+          throw new Error("Invalid file type. Only CSV, JSON, TXT allowed");
+        }
+
+        const fileName = path.basename(filePath);
+        const readableStream = fs.createReadStream(filePath);
+
+        const options = {
+          pinataMetadata: {
+            name: metadata.name || fileName,
+            keyvalues: metadata.keyvalues || {},
+          },
+          pinataOptions: {
+            cidVersion: metadata.cidVersion || 0,
+            wrapWithDirectory: metadata.wrapWithDirectory || false,
+          },
+        };
+
+        const result = await pinata.pinFileToIPFS(readableStream, options);
+        console.log("File uploaded successfully!");
+        console.log("IPFS Hash:", result.IpfsHash);
+        console.log("Pin Size:", result.PinSize, "bytes");
+        console.log("Timestamp:", result.Timestamp);
+
+        return result.IpfsHash;
+      } catch (error) {
+        console.error("Error uploading file to Pinata:", error.message || error);
+        throw error instanceof Error ? error : new Error(error);
+      }
+    },
+    {
+      retries: 3,
+      factor: 2,
+      minTimeout: 1000,
+      maxTimeout: 5000,
     }
-    const stats = fs.statSync(filePath);
-
-    if (stats.size > MAX_FILE_SIZE) {
-      throw new Error("File size exceeds 10MB limit");
-    }
-
-    if (!/\.(csv|json|txt)$/i.test(filePath)) {
-      throw new Error("Invalid file type. Only CSV, JSON, TXT allowed");
-    }
-    const fileName = path.basename(filePath);
-    const readableStream = fs.createReadStream(filePath);
-
-    const options = {
-      pinataMetadata: {
-        name: metadata.name || fileName,
-        keyvalues: metadata.keyvalues || {},
-      },
-      pinataOptions: {
-        cidVersion: metadata.cidVersion || 0,
-        wrapWithDirectory: metadata.wrapWithDirectory || false,
-      },
-    };
-
-    const result = await pinata.pinFileToIPFS(readableStream, options);
-    console.log("File uploaded successfully!");
-    console.log("IPFS Hash:", result.IpfsHash);
-    console.log("Pin Size:", result.PinSize, "bytes");
-    console.log("Timestamp:", result.Timestamp);
-
-    return result.IpfsHash;
-  } catch (error) {
-    console.error("Error uploading file to Pinata:", error.message || error);
-    throw error instanceof Error ? error : new Error(error);
-  }
+  );
 }
