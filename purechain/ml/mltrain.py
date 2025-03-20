@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score,precision_score, recall_score
 import pickle
 
 # Load data
@@ -28,9 +28,13 @@ y_pred = rf.predict(X_test_scaled)
 
 # Metrics
 accuracy = accuracy_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred, average='binary')
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
 print(f"Accuracy: {accuracy:.4f}")
 print(f"F1 Score: {f1:.4f}")
+print(f"Precision: {precision:.4f}")
+print(f"Recall: {recall:.4f}")
 
 # Save model
 with open("rf_model.pkl", "wb") as f:

@@ -31,6 +31,8 @@ const trainModel = async (req, res) => {
       console.log(`Python: ${str}`);
       if (str.match(/Accuracy: ([\d.]+)/)) metrics.accuracy = parseFloat(str.match(/Accuracy: ([\d.]+)/)[1]);
       if (str.match(/F1 Score: ([\d.]+)/)) metrics.f1Score = parseFloat(str.match(/F1 Score: ([\d.]+)/)[1]);
+      if (str.match(/Precision: ([\d.]+)/)) metrics.precision = parseFloat(str.match(/Precision: ([\d.]+)/)[1]);
+      if (str.match(/Recall: ([\d.]+)/)) metrics.recall = parseFloat(str.match(/Recall: ([\d.]+)/)[1]);
     });
     pythonProcess.stderr.on("data", (data) => console.error(`Python Error: ${data}`));
 
@@ -40,11 +42,13 @@ const trainModel = async (req, res) => {
         return res.status(500).json({ error: "Failed to train model" });
       }
 
-      const modelId = await convex.mutation("api.models.saveModelDetails", {
+      const modelId = await convex.mutation("model:saveModelDetails", {
         dataCount: allData.length,
         modelType: "RandomForest",
-        accuracy: metrics.accuracy || "N/A",
-        f1Score: metrics.f1Score || "N/A",
+        accuracy: metrics.accuracy !== null ? metrics.accuracy.toString() : "N/A",
+        f1Score: metrics.f1Score !== null ? metrics.f1Score.toString() : "N/A",
+        precision: metrics.precision !== null ? metrics.precision.toString() : "N/A",
+        recall: metrics.recall !== null ? metrics.recall.toString() : "N/A",
         status: "success",
       });
 

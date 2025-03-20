@@ -5,7 +5,10 @@ export const saveModelDetails = mutation({
   args: {
     dataCount: v.number(),
     modelType: v.string(),
-    silhouetteScore: v.string(),
+    accuracy: v.string(),    
+    f1Score: v.string(),     
+    precision: v.string(),   
+    recall: v.string(),      
     status: v.string(),
   },
   handler: async (ctx, args) => {
@@ -13,7 +16,10 @@ export const saveModelDetails = mutation({
       timestamp: Date.now(),
       dataCount: args.dataCount,
       modelType: args.modelType,
-      silhouetteScore: args.silhouetteScore,
+      accuracy: args.accuracy,
+      f1Score: args.f1Score,
+      precision: args.precision,
+      recall: args.recall,
       status: args.status,
     });
     return modelId;
