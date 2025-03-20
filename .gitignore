@@ -34,3 +34,6 @@ coverage/
 
 # Solidity generated files
 *.sol.js
+
+rf_model.pkl
+scaler.pkl
