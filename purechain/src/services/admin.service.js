@@ -2,12 +2,17 @@ import { retrieveFileFromIPFS } from "../../pinata/fileretriver.js";
 import { ConvexHttpClient } from "convex/browser";
 import { sendEmail } from "../utils/email.js";
 import pkg from 'papaparse';
-import fs from 'fs/promises'; // For reading saved files if needed
+import fs from 'fs/promises';
+import retry from 'async-retry';
 const { parse } = pkg;
 
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 
-// Fetch all valid data from Convex
+/**
+ * fetchAllValidData
+ * Fetches all valid submissions from Convex, retrieves the data from IPFS, and standardizes it for training.
+ * @returns {Promise<Array>} Array of standardized data rows.
+ */
 async function fetchAllValidData() {
   try {
     const validatedData = await convex.query("submissions:getValidatedData", { quality: "VALID" });
@@ -15,7 +20,18 @@ async function fetchAllValidData() {
     const allData = [];
 
     for (const entry of filteredData) {
-      const result = await retrieveFileFromIPFS(entry);
+      console.log(`Retrieving data from IPFS hash: ${entry}`);
+      let result;
+      try {
+        result = await retry(
+          () => retrieveFileFromIPFS(entry),
+          { retries: 3, factor: 2, minTimeout: 1000, maxTimeout: 5000 }
+        );
+      } catch (error) {
+        console.error(`Failed to retrieve data from IPFS hash ${entry}:`, error);
+        continue;
+      }
+
       let csvText;
       if (typeof result === 'string') {
         csvText = result;
@@ -34,7 +50,6 @@ async function fetchAllValidData() {
 
       // Map headers and standardize target
       const mappedData = parsed.data.map(row => {
-        // Standardize target to binary (0 or 1)
         let targetValue;
         const rawTarget = row.diabetes || row.CLASS || row.Outcome;
         if (typeof rawTarget === 'string') {
@@ -50,15 +65,21 @@ async function fetchAllValidData() {
           bmi: row.bmi || row.BMI,
           hba1c: row.HbA1c || row.HbA1c_level || row.hba1c,
           glucose: row.blood_glucose_level || row.Glucose || row.glucose,
-          target: targetValue
+          target: targetValue,
         };
       });
 
       // Filter out rows with missing critical fields
+      const requiredColumns = ['gender', 'age', 'bmi', 'target'];
       const cleanedData = mappedData.filter(row => 
-        row.gender !== undefined && row.age !== undefined && row.bmi !== undefined && 
-        row.target !== undefined
+        requiredColumns.every(col => row[col] !== undefined)
       );
+
+      // Log data quality
+      const totalRows = mappedData.length;
+      const cleanedRows = cleanedData.length;
+      const dropPercentage = totalRows > 0 ? ((totalRows - cleanedRows) / totalRows) * 100 : 0;
+      console.log(`Dropped ${dropPercentage.toFixed(2)}% of rows due to missing critical fields`);
 
       allData.push(...cleanedData);
     }
@@ -72,72 +93,127 @@ async function fetchAllValidData() {
   }
 }
 
+/**
+ * dataToCsvString
+ * Converts the standardized data to a CSV string for training.
+ * @param {Array} data - Array of data rows.
+ * @returns {Promise<string>} CSV string.
+ */
 async function dataToCsvString(data) {
   if (data.length === 0) return "";
 
   const headers = ['gender', 'age', 'bmi', 'hba1c', 'glucose', 'target'];
+  const escapeCsvValue = (value) => {
+    if (value == null) return "";
+    const str = String(value);
+    if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
   const rows = data.map(row =>
-    headers.map(header => (row[header] ?? "").toString()).join(",")
+    headers.map(header => escapeCsvValue(row[header])).join(",")
   );
 
   return [headers.join(","), ...rows].join("\n");
 }
 
-// Send notifications to users
-async function sendNotifications(validUsers, invalidUsers, silhouetteScore) {
-  let emailErrors = [];
+/**
+ * sendNotifications
+ * Sends email notifications to users about the training results, including all metrics.
+ * @param {Array} validUsers - List of users with valid submissions.
+ * @param {Array} invalidUsers - List of users with invalid submissions.
+ * @param {Object} metrics - Metrics of the trained model (accuracy, f1Score, precision, recall).
+ * @returns {Promise<Array>} Array of email errors, if any.
+ */
+async function sendNotifications(validUsers, invalidUsers, metrics) {
+  const emailPromises = [];
 
+  // Send notifications for valid users
   for (const submission of validUsers) {
-    const emailText = `Congratulations, ${submission.user.name}! Your data (${submission.datasetName}) was used to build an HDBSCAN model. It identified risk groups with a silhouette score of ${silhouetteScore || "N/A"}. Thank you for contributing!`;
+    const emailText = `Congratulations, ${submission.user.name}! Your data (${submission.datasetName}) was used to train a Random Forest model for diabetes prediction. The model achieved the following performance metrics:
+      <table style="border-collapse: collapse; width: 50%;">
+        <tr><th style="border: 1px solid #ddd; padding: 8px;">Metric</th><th style="border: 1px solid #ddd; padding: 8px;">Value</th></tr>
+        <tr><td style="border: 1px solid #ddd; padding: 8px;">Accuracy</td><td style="border: 1px solid #ddd; padding: 8px;">${metrics.accuracy || "N/A"}</td></tr>
+        <tr><td style="border: 1px solid #ddd; padding: 8px;">F1 Score</td><td style="border: 1px solid #ddd; padding: 8px;">${metrics.f1Score || "N/A"}</td></tr>
+        <tr><td style="border: 1px solid #ddd; padding: 8px;">Precision</td><td style="border: 1px solid #ddd; padding: 8px;">${metrics.precision || "N/A"}</td></tr>
+        <tr><td style="border: 1px solid #ddd; padding: 8px;">Recall</td><td style="border: 1px solid #ddd; padding: 8px;">${metrics.recall || "N/A"}</td></tr>
+      </table>
+      Thank you for contributing!`;
     const timestamp = Date.now();
 
-    try {
-      await sendEmail(submission.user.email, "Model Training Success", emailText);
-      await convex.mutation("notification:createNotification", {
-        userId: submission.userId,
-        email: submission.user.email,
-        subject: "Model Training Success",
-        status: "success",
-        timestamp,
-      });
-    } catch (error) {
-      emailErrors.push(`Failed to email ${submission.user.email}: ${error.message}`);
-      await convex.mutation("notification:createNotification", {
-        userId: submission.userId,
-        email: submission.user.email,
-        subject: "Model Training Success",
-        status: "failed",
-        errorMessage: error.message,
-        timestamp,
-      });
-    }
+    emailPromises.push(
+      sendEmail(submission.user.email, "Model Training Success", emailText)
+        .then(() =>
+          convex.mutation("notification:createNotification", {
+            userId: submission.userId,
+            email: submission.user.email,
+            subject: "Model Training Success",
+            status: "success",
+            timestamp,
+          })
+        )
+        .catch((error) => ({
+          error: `Failed to email ${submission.user.email}: ${error.message}`,
+          notification: {
+            userId: submission.userId,
+            email: submission.user.email,
+            subject: "Model Training Success",
+            status: "failed",
+            errorMessage: error.message,
+            timestamp,
+          },
+        }))
+    );
   }
 
+  // Send notifications for invalid users
   for (const submission of invalidUsers) {
     const issues = submission.validationIssues || "Unknown issues";
-    const emailText = `Sorry, ${submission.user.name}. Your data (${submission.datasetName}) didn’t meet quality standards and wasn’t used. Issues: ${issues}. Please improve and resubmit!`;
+    const emailText = `Sorry, ${submission.user.name}. Your data (${submission.datasetName}) didn’t meet quality standards and wasn’t used for training. Issues: ${issues}. Please improve and resubmit!`;
     const timestamp = Date.now();
 
-    try {
-      await sendEmail(submission.user.email, "Data Quality Notice", emailText);
-      await convex.mutation("notification:createNotification", {
-        userId: submission.userId,
-        email: submission.user.email,
-        subject: "Data Quality Notice",
-        status: "success",
-        timestamp,
-      });
-    } catch (error) {
-      emailErrors.push(`Failed to email ${submission.user.email}: ${error.message}`);
-      await convex.mutation("notification:createNotification", {
-        userId: submission.userId,
-        email: submission.user.email,
-        subject: "Data Quality Notice",
-        status: "failed",
-        errorMessage: error.message,
-        timestamp,
-      });
-    }
+    emailPromises.push(
+      sendEmail(submission.user.email, "Data Quality Notice", emailText)
+        .then(() =>
+          convex.mutation("notification:createNotification", {
+            userId: submission.userId,
+            email: submission.user.email,
+            subject: "Data Quality Notice",
+            status: "success",
+            timestamp,
+          })
+        )
+        .catch((error) => ({
+          error: `Failed to email ${submission.user.email}: ${error.message}`,
+          notification: {
+            userId: submission.userId,
+            email: submission.user.email,
+            subject: "Data Quality Notice",
+            status: "failed",
+            errorMessage: error.message,
+            timestamp,
+          },
+        }))
+    );
+  }
+
+  // Process all email promises
+  const results = await Promise.all(emailPromises);
+  const emailErrors = results
+    .filter((result) => result && result.error)
+    .map((result) => result.error);
+  const failedNotifications = results
+    .filter((result) => result && result.notification)
+    .map((result) => result.notification);
+
+  // Batch insert failed notifications
+  if (failedNotifications.length > 0) {
+    await Promise.all(
+      failedNotifications.map((notification) =>
+        convex.mutation("notification:createNotification", notification)
+      )
+    );
   }
 
   return emailErrors;
