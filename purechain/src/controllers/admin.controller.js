@@ -151,7 +151,7 @@ const trainModel = async (req, res) => {
  * @param {Object} res - Express response object.
  * @returns {Promise<void>} Responds with the list of invalid submissions or an error.
  */
-const getInvalidSubmissions = async (req, res) => {
+const getvalidUser = async (req, res) => {
   try {
     console.log("Fetching all invalid submissions from Convex...");
     const allData = await convex.query(api.users.getInvalidSubmissionsWithUsers, {});
@@ -168,14 +168,14 @@ const getInvalidSubmissions = async (req, res) => {
 };
 
 /**
- * getValidSubmissions
+ * getInvalidUser
  * Fetches all submissions with validationStatus "VALID" along with user details.
  * Restricted to admin users.
  * @param {Object} req - Express request object.
  * @param {Object} res - Express response object.
  * @returns {Promise<void>} Responds with the list of valid submissions or an error.
  */
-const getValidSubmissions = async (req, res) => {
+const getInvalidUser = async (req, res) => {
   try {
     console.log("Fetching all valid submissions from Convex...");
     const allData = await convex.query(api.users.getValidSubmissionsWithUsers, {});
@@ -215,4 +215,4 @@ const getNotifications = async (req, res) => {
   }
 };
 
-export default { trainModel, getInvalidSubmissions, getValidSubmissions, getNotifications };
+export default { trainModel, getInvalidUser, getvalidUser, getNotifications };

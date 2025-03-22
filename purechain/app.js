@@ -4,11 +4,13 @@ import fileUpload from 'express-fileupload';
 import routes from './src/routes.js';
 import cors from 'cors';
 import { cleanupTempDir } from './src/utils/cleanup.js';
+import { clerkMiddleware } from '@clerk/express';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
 
 // Middleware
 app.use(cors({
@@ -20,8 +22,11 @@ app.use(fileUpload({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     abortOnLimit: true,
 }));
-
+console.log(process.env.CLERK_SECRET_KEY);
 // Clerk middleware for authentication
+app.use(clerkMiddleware({
+    apiKey: process.env.CLERK_SECRET_KEY
+}));
 
 // Routes
 app.use('/api', routes);
