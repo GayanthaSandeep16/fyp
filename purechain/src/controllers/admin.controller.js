@@ -100,11 +100,10 @@ const trainModel = async (req, res) => {
           modelFilePath,
           scalerFilePath,
         });
-
         // Fetch valid and invalid submissions for notifications
-        const validUsers = await convex.query(api.users.getValidSubmissionsWithUsers, {});
-        const invalidUsers = await convex.query(api.users.getInvalidSubmissionsWithUsers, {});
-
+        const validUsers = await convex.query("users:validSubmissions", {});
+        const invalidUsers = await convex.query("users:InValidSubmissions", {});
+        
         // Send notifications to users with all metrics
         const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics);
 

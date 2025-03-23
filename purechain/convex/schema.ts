@@ -37,14 +37,19 @@ export default defineSchema({
         timestamp: v.number(), // Unix timestamp (milliseconds)
         }).index("by_timestamp", ["timestamp"]),
 
-        models: defineTable({
-            timestamp: v.number(),          
-            dataCount: v.number(),          
-            modelType: v.string(),         
-            accuracy: v.string(),          
-            f1Score: v.string(),           
-            precision: v.string(),         
-            recall: v.string(),            
-            status: v.string(),            
+        odels: defineTable({
+            timestamp: v.number(),
+            dataCount: v.number(),
+            modelType: v.string(),
+            accuracy: v.string(),
+            f1Score: v.string(),
+            precision: v.string(),
+            recall: v.string(),
+            status: v.string(),
+        
+            // Add these two fields so they won't be considered "extra"
+            modelFilePath: v.string(),
+            scalerFilePath: v.string(),
           }),
+
 });
