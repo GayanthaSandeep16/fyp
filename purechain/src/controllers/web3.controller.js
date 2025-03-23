@@ -8,7 +8,6 @@ import {
   getUserDetails 
 } from '../services/blockchain.service.js';
 
-const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
 
 /**
  * getWeb3Status
@@ -18,6 +17,7 @@ const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
  * @returns {Promise<void>} Responds with the Web3 connection status.
  */
 export const getWeb3Status = async (req, res) => {
+  const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
   try {
     const block = await web3.eth.getBlockNumber();
     const accounts = await web3.eth.getAccounts();
@@ -43,6 +43,7 @@ export const getWeb3Status = async (req, res) => {
  * @returns {Promise<void>} Responds with the user's reputation.
  */
 export const getReputation = async (req, res) => {
+  const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
   const { walletAddress } = req.body;
 
   try {
@@ -82,6 +83,7 @@ export const getReputation = async (req, res) => {
  * @returns {Promise<void>} Responds with the user's details.
  */
 export const fetchUserDetails = async (req, res) => {
+  const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
   const { walletAddress } = req.body || req.query;
 
   try {
@@ -110,6 +112,7 @@ export const fetchUserDetails = async (req, res) => {
  * @returns {Promise<void>} Responds with the transaction details.
  */
 export const checkTransaction = async (req, res) => {
+  const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
   const { txHash } = req.body;
 
   try {
@@ -142,6 +145,7 @@ export const checkTransaction = async (req, res) => {
  * @returns {Promise<void>} Responds with the blacklist status.
  */
 export const checkBlacklistStatus = async (req, res) => {
+  const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
   const { walletAddress } = req.body;
 
   try {

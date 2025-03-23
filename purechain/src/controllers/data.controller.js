@@ -9,7 +9,7 @@ import path from "path";
 import Web3 from "web3";
 
 // Initialize Convex client with the CONVEX_URL_2 environment variable
-const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
+
 import { api } from "../../convex/_generated/api.js";
 
 // Initialize Web3 for transaction confirmation
@@ -29,12 +29,12 @@ const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:8545");
  */
 const submitData = async (req, res) => {
   let filePath; // Declare filePath to store the temporary file path
-
+  const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
   try {
     // Extract file and user details from the request
     const file = req.files?.files;
     const { clerkUserId, walletAddress } = req.body;
-
+    console.time("submitData");
     console.log("Request body:", req.body);
 
     // Validate required fields
@@ -50,6 +50,7 @@ const submitData = async (req, res) => {
     // Validate file type
     const allowedFileTypes = ['.csv', '.json', '.txt'];
     const fileExtension = path.extname(file.name).toLowerCase();
+    console.log(`Validating file: ${file.name}, Size: ${file.size} bytes`);
     if (!allowedFileTypes.includes(fileExtension)) {
       return res.status(400).json({ message: "Invalid file type. Only CSV, JSON, and TXT are allowed." });
     }
@@ -71,12 +72,16 @@ const submitData = async (req, res) => {
 
     // Save the uploaded file to a temporary location
     filePath = await saveFileToTemp(file);
+    console.log(`File saved to temp: ${filePath}`);
 
     // Validate the data using the data validator
+    console.time("validateData");
     const validation = await validateData(filePath);
+    console.timeEnd("validateData");
 
     // If data is invalid, penalize the user and log the submission
     if (validation.quality === "INVALID") {
+      console.log(`Invalid data detected. Issues: ${validation.issues}`);
       const penalizeResult = await penalizeUser(uniqueId, walletAddress);
       await convex.mutation(api.submissions.submitData, {
         userId: user._id,
@@ -96,6 +101,7 @@ const submitData = async (req, res) => {
     }
 
     // If data is valid, upload it to IPFS via Pinata
+    console.time("uploadFileToPinata");
     const ipfsHash = await uploadFileToPinata(filePath, {
       name: `${user.name}_${Date.now()}`,
       keyvalues: {
@@ -105,9 +111,12 @@ const submitData = async (req, res) => {
         validationStatus: validation.quality,
       },
     });
+    console.timeEnd("uploadFileToPinata");
 
     // Submit the data to the blockchain
+    console.time("submitDataToContract");
     const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
+    console.timeEnd("submitDataToContract");
 
     // Confirm the transaction
     const txReceipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
@@ -129,6 +138,7 @@ const submitData = async (req, res) => {
     // Fetch updated reputation
     const updatedReputation = await getReputationService(walletAddress);
 
+    console.timeEnd("submitData");
     // Respond with success
     successResponse(res, {
       message: "Data submitted successfully",

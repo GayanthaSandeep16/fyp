@@ -1,12 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 
-// __dirname is not available in ES Modules, so we define it manually
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+// No need to declare __filename or __dirname; they are provided by CommonJS
 
 export const saveFileToTemp = async (file) => {
   return new Promise((resolve, reject) => {

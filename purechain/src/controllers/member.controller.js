@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 // Initialize Convex client with the CONVEX URL from environment variables
-const client = new ConvexHttpClient(process.env["CONVEX"]);
+
 import { api } from "../../convex/_generated/api.js";
 
 /**
@@ -25,6 +25,7 @@ import { api } from "../../convex/_generated/api.js";
  */
 async function createUser(req, res) {
   const { name, email, organization, sector, role, clerkUserId, walletAddress } = req.body;
+  const client = new ConvexHttpClient(process.env["CONVEX"]);
 
   // Validate required fields
   if (!name || !email || !organization || !sector || !role || !clerkUserId || !walletAddress) {
