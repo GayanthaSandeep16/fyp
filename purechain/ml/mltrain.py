@@ -11,7 +11,7 @@ csv_path = sys.argv[1]
 df = pd.read_csv(csv_path)
 
 # Preprocess
-df['gender'] = df['gender'].map({'Female': 0, 'Male': 1, 'F': 0, 'M': 1}).fillna(0)  # Adjust mapping as needed
+df['gender'] = df['gender'].map({'Female': 0, 'Male': 1, 'F': 0, 'M': 1}).fillna(0)  
 X = df[['gender', 'age', 'bmi', 'hba1c', 'glucose']].fillna(df.mean(numeric_only=True))
 y = df['target']
 
