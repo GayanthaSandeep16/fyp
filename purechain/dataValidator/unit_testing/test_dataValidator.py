@@ -19,7 +19,6 @@ class TestDataValidation(unittest.TestCase):
 
     def test_duplicate_rows(self):
         """Test that data with >20 duplicate rows is flagged as INVALID."""
-        # Use 22 rows to get 21 duplicates (exceeds threshold of 20)
         df = pd.DataFrame({"age": [25] * 22, "glucose": [100] * 22})
         result = validate_data(df)
         self.assertEqual(result["quality"], "INVALID", "Should be INVALID due to duplicates")

@@ -37,7 +37,7 @@ export default defineSchema({
         timestamp: v.number(), // Unix timestamp (milliseconds)
         }).index("by_timestamp", ["timestamp"]),
 
-        odels: defineTable({
+        models: defineTable({
             timestamp: v.number(),
             dataCount: v.number(),
             modelType: v.string(),

@@ -164,7 +164,7 @@ describe('data.controller -> submitData', () => {
   test('400 if invalid file type', async () => {
     mockReq.body = { clerkUserId: 'abc', walletAddress: '0x123' };
     mockReq.files = {
-      files: { name: 'data.exe', size: 1000 }, // .exe not allowed
+      files: { name: 'data.png', size: 1000 }, 
     };
 
     await submitData(mockReq, mockRes);
