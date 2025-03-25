@@ -1,6 +1,6 @@
 import express from 'express';
-import { submitData } from './controllers/data.controller.js';
-import { getWeb3Status, getReputation, checkTransaction } from './controllers/web3.controller.js';
+import { submitData  } from './controllers/data.controller.js';
+import { getWeb3Status, getReputation, getSubmissions } from './controllers/web3.controller.js';
 import memberController from './controllers/member.controller.js';
 import adminController from './controllers/admin.controller.js';
 import { requireAuth, isAdmin } from '../middleware/auth.middleware.js'; // Import the middleware
@@ -62,7 +62,8 @@ router.get('/reputation', requireAuth, getReputation);
  * Checks the status of a blockchain transaction.
  * Requires authentication.
  */
-router.get('/check-transaction', requireAuth, checkTransaction);
+router.post('/allSubmisson', requireAuth, getSubmissions);
+
 
 /**
  * GET /test

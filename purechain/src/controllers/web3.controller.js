@@ -7,6 +7,7 @@ import {
   getReputationService,
   getUserDetails 
 } from '../services/blockchain.service.js';
+import { ConvexHttpClient } from "convex/browser";
 
 const web3 = new Web3(process.env.WEB3_PROVIDER || 'HTTP://127.0.0.1:8545');
 
@@ -109,26 +110,65 @@ export const fetchUserDetails = async (req, res) => {
  * @param {Object} res - Express response object.
  * @returns {Promise<void>} Responds with the transaction details.
  */
-export const checkTransaction = async (req, res) => {
-  const { txHash } = req.body;
 
+
+
+// Initialize Convex client
+const convex = new ConvexHttpClient(process.env.CONVEX_URL_2);
+
+/**
+ * getSubmissions
+ * Fetches all submissions from Convex and their corresponding transaction details.
+ * Requires authentication.
+ * @param {Object} req - Express request object.
+ * @param {Object} res - Express response object.
+ * @returns {Promise<void>} Responds with all submissions and their transaction details.
+ */
+export const getSubmissions = async (req, res) => {
   try {
-    if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
-      return errorResponse(res, 'Valid transaction hash is required', 400);
+    // Step 1: Fetch all submissions from Convex
+    const submissions = await convex.query("submissions:getSubmissions");
+    console.log("Fetched submissions:", submissions);
+
+    if (!submissions || submissions.length === 0) {
+      return successResponse(res, { submissions: [], transactions: [] });
     }
-   
-    const details = await getTransactionDetails(txHash);
-    
+
+    // Step 2: Fetch transaction details for each submission
+    const transactionPromises = submissions.map(async (submission) => {
+      if (!submission.transactionHash) {
+        return null; // Skip submissions without a transaction hash
+      }
+      try {
+        const details = await getTransactionDetails(submission.transactionHash);
+        return {
+          message: `Transaction successful in block #${details.blockNumber}`,
+          transactionHash: details.transactionHash,
+          from: details.from,
+          status: details.status,
+          events: details.events,
+          gasUsed: details.gasUsed,
+        };
+      } catch (error) {
+        console.error(
+          `Error fetching transaction ${submission.transactionHash}:`,
+          error
+        );
+        return null; // Skip failed transactions
+      }
+    });
+
+    const transactions = await Promise.all(transactionPromises);
+    const validTransactions = transactions.filter((tx) => tx !== null);
+
+    // Step 3: Return the combined data
     successResponse(res, {
-      message: `Transaction successful in block #${details.blockNumber}`,
-      transactionHash: details.transactionHash,
-      from: details.from,
-      status: details.status,
-      events: details.events,
-      gasUsed: details.gasUsed,
+      submissions,
+      transactions: validTransactions,
     });
   } catch (error) {
-    errorResponse(res, error.message, 500);
+    console.error("Error fetching submissions:", error);
+    errorResponse(res, `Failed to fetch submissions: ${error.message}`, 500);
   }
 };
 
