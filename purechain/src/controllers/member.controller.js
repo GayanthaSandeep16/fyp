@@ -1,9 +1,11 @@
 import { ConvexHttpClient } from "convex/browser";
 import dotenv from "dotenv";
+import { Clerk } from "@clerk/clerk-sdk-node";
 
 // Load environment variables from .env.local
 dotenv.config({ path: ".env.local" });
 
+const clerkClient = new Clerk({ secretKey: process.env.CLERK_SECRET_KEY });
 // Initialize Convex client with the CONVEX URL from environment variables
 const client = new ConvexHttpClient(process.env["CONVEX"]);
 import { api } from "../../convex/_generated/api.js";
@@ -30,7 +32,13 @@ async function createUser(req, res) {
   if (!name || !email || !organization || !sector || !role || !clerkUserId || !walletAddress) {
     return res.status(400).json({ error: "All fields are required." });
   }
-
+  try {
+    // Update Clerk user's unsafeMetadata
+    await clerkClient.users.updateUser(clerkUserId, {
+      unsafeMetadata: {
+          walletAddress,
+      },
+  });
   // Additional validation for email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
@@ -42,7 +50,7 @@ async function createUser(req, res) {
     return res.status(400).json({ error: "Role must be either 'Admin' or 'User'." });
   }
 
-  try {
+ 
     // Call the Convex mutation to create the user
     const userId = await client.mutation(api.users.createUser, {
       name,
@@ -55,7 +63,7 @@ async function createUser(req, res) {
     });
 
     // Respond with success message and user ID
-    res.status(201).json({ userId, message: "User created successfully!" });
+    res.status(200).json({ message: "User created successfully!" });
   } catch (error) {
     // Handle errors (e.g., duplicate Clerk ID, Convex errors)
     res.status(500).json({ error: error.message });

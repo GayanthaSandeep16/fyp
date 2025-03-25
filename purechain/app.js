@@ -22,7 +22,6 @@ app.use(fileUpload({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     abortOnLimit: true,
 }));
-console.log(process.env.CLERK_SECRET_KEY);
 // Clerk middleware for authentication
 app.use(clerkMiddleware({
     apiKey: process.env.CLERK_SECRET_KEY
