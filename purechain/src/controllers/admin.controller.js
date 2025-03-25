@@ -4,7 +4,11 @@ import { spawn } from "child_process";
 import fs from "fs/promises";
 import path from "path";
 import { sendEmail } from "../utils/email.js"; // Import sendEmail for admin notifications
+import { fileURLToPath } from "url";
 
+// Derive __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 // Initialize Convex client with the CONVEX_URL_2 environment variable
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 
@@ -19,29 +23,33 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
  * @returns {Promise<void>} Responds with the training result or an error.
  */
 const trainModel = async (req, res) => {
-  let tempFilePath; // Declare tempFilePath for cleanup
+  let tempFilePath;
 
   try {
-    console.log("Fetching all valid data from Convex and Pinata...");
-    const allData = await fetchAllValidData();
-
-    // Check if there’s valid data to train on
-    if (allData.length === 0) {
-      return res.status(400).json({ error: "No valid data found to train on" });
+    const { modelId } = req.body;
+    if (!modelId) {
+      return res.status(400).json({ error: "Model ID is required" });
     }
 
-    // Convert the data to a CSV string and save it to a temporary file
+    console.log(`Fetching all valid data for model ${modelId} from Convex...`);
+    const allData = await convex.query("users:validSubmissions", { modelId });
+
+    // Check if there’s enough valid data to train on (minimum 2 samples for train-test split)
+    if (allData.length < 1) {
+      return res.status(400).json({ 
+        error: `Insufficient data for training ${modelId}. At least 2 valid submissions are required, but found ${allData.length}.`
+      });
+    }
+
     const csvString = await dataToCsvString(allData);
-    tempFilePath = path.join(__dirname, "../../temp_data.csv"); // Use a consistent temp directory
+    tempFilePath = path.join(__dirname, "../../temp_data.csv");
     await fs.writeFile(tempFilePath, csvString);
     console.log(`Data saved to ${tempFilePath}`);
 
-    // Run the Python script to train the Random Forest model
-    const startTime = Date.now(); // Track training duration
+    const startTime = Date.now();
     const pythonProcess = spawn("python3", ["./ml/mltrain.py", tempFilePath]);
     const metrics = { accuracy: null, f1Score: null, precision: null, recall: null };
 
-    // Capture stdout to extract metrics
     pythonProcess.stdout.on("data", (data) => {
       const str = data.toString();
       console.log(`Python: ${str}`);
@@ -51,44 +59,39 @@ const trainModel = async (req, res) => {
       if (str.match(/Recall: ([\d.]+)/)) metrics.recall = parseFloat(str.match(/Recall: ([\d.]+)/)[1]);
     });
 
-    // Log any errors from the Python script
     pythonProcess.stderr.on("data", (data) => {
       console.error(`Python Error: ${data}`);
     });
 
-    // Handle the Python script completion
     await new Promise((resolve, reject) => {
       pythonProcess.on("close", async (code) => {
-        const duration = (Date.now() - startTime) / 1000; // Duration in seconds
+        const duration = (Date.now() - startTime) / 1000;
         console.log(`Training completed in ${duration} seconds`);
 
         if (code !== 0) {
           return reject(new Error(`Python script failed with code ${code}`));
         }
 
-        // Validate model performance
         if (metrics.f1Score && metrics.f1Score < 0.7) {
           console.warn("Low F1 score detected. Model quality may be poor.");
           try {
             await sendEmail(
-              process.env.ADMIN_EMAIL, 
+              process.env.ADMIN_EMAIL,
               "Low Model Performance Warning",
-              `The Random Forest model trained with an F1 score of ${metrics.f1Score}, which is below the threshold of 0.7. Consider reviewing the data or model parameters.`
+              `The Random Forest model trained for ${modelId} with an F1 score of ${metrics.f1Score}, which is below the threshold of 0.7.`
             );
           } catch (emailError) {
             console.error("Failed to send admin notification:", emailError);
           }
         }
 
-        // Model versioning: Move the model files to versioned paths
         const modelVersion = Date.now();
         const modelFilePath = path.join(__dirname, `../../rf_model_${modelVersion}.pkl`);
         const scalerFilePath = path.join(__dirname, `../../scaler_${modelVersion}.pkl`);
         await fs.rename(path.join(__dirname, "../../rf_model.pkl"), modelFilePath);
         await fs.rename(path.join(__dirname, "../../scaler.pkl"), scalerFilePath);
 
-        // Save model details in Convex
-        const modelId = await convex.mutation("model:saveModelDetails", {
+        const savedModelId = await convex.mutation("model:saveModelDetails", {
           dataCount: allData.length,
           modelType: "RandomForest",
           accuracy: metrics.accuracy !== null ? metrics.accuracy.toString() : "N/A",
@@ -96,22 +99,19 @@ const trainModel = async (req, res) => {
           precision: metrics.precision !== null ? metrics.precision.toString() : "N/A",
           recall: metrics.recall !== null ? metrics.recall.toString() : "N/A",
           status: "success",
-          timestamp: Date.now(),
           modelFilePath,
           scalerFilePath,
+          created_at: Date.now(),
+          modelId,
         });
 
-        // Fetch valid and invalid submissions for notifications
-        const validUsers = await convex.query("users:validSubmissions", {});
-        const invalidUsers = await convex.query("users:InValidSubmissions", {});
-
-        // Send notifications to users with all metrics
+        const validUsers = await convex.query("users:validSubmissions", { modelId });
+        const invalidUsers = await convex.query("users:InValidSubmissions", { modelId });
         const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics);
 
-        // Respond with the training result
         res.status(200).json({
-          message: "RandomForest model trained successfully",
-          modelId,
+          message: `RandomForest model trained successfully for ${modelId}`,
+          modelId: savedModelId,
           modelVersion: modelVersion.toString(),
           dataCount: allData.length,
           modelType: "RandomForest",
@@ -131,7 +131,6 @@ const trainModel = async (req, res) => {
     console.error("Error in /train endpoint:", error);
     res.status(500).json({ error: "Failed to train model", details: error.message });
   } finally {
-    // Clean up: Delete the temporary file if it exists
     if (tempFilePath) {
       try {
         await fs.unlink(tempFilePath);
@@ -142,7 +141,6 @@ const trainModel = async (req, res) => {
     }
   }
 };
-
 /**
  * getInvalidSubmissions
  * Fetches all submissions with validationStatus "INVALID" along with user details.
@@ -153,17 +151,18 @@ const trainModel = async (req, res) => {
  */
 const getvalidUser = async (req, res) => {
   try {
-    console.log("Fetching all invalid submissions from Convex...");
-    const allData = await convex.query("users:validSubmissions", {});
+    const modelId = req.query.modelId; // Get modelId from query params
+    console.log(`Fetching valid submissions ${modelId ? `for model ${modelId}` : "for all models"} from Convex...`);
+    const allData = await convex.query("users:validSubmissions", modelId ? { modelId } : {});
     
     if (allData.length === 0) {
-      return res.status(404).json({ error: "No invalid submissions found" });
+      return res.status(200).json({ message: modelId ? `Nobody submitted valid data to ${modelId}` : "No valid submissions found" });
     }
 
     res.status(200).json(allData);
   } catch (error) {
-    console.error("Error in /invalid-submissions endpoint:", error);
-    res.status(500).json({ error: "Failed to fetch invalid submissions", details: error.message });
+    console.error("Error in /valid-submissions endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch valid submissions", details: error.message });
   }
 };
 
@@ -177,18 +176,18 @@ const getvalidUser = async (req, res) => {
  */
 const getInvalidUser = async (req, res) => {
   try {
-    console.log("Fetching all valid submissions from Convex...");
-    const allData = await convex.query("users:InValidSubmissions", {});
-
+    const modelId = req.query.modelId; // Get modelId from query params
+    console.log(`Fetching invalid submissions ${modelId ? `for model ${modelId}` : "for all models"} from Convex...`);
+    const allData = await convex.query("users:InValidSubmissions", modelId ? { modelId } : {});
 
     if (allData.length === 0) {
-      return res.status(200).json({ error: "No valid submissions found" });
+      return res.status(200).json({ message: modelId ? `Nobody submitted invalid data to ${modelId}` : "No invalid submissions found" });
     }
 
     res.status(200).json(allData);
   } catch (error) {
-    console.error("Error in /valid-submissions endpoint:", error);
-    res.status(500).json({ error: "Failed to fetch valid submissions", details: error.message });
+    console.error("Error in /invalid-submissions endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch invalid submissions", details: error.message });
   }
 };
 

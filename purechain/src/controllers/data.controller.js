@@ -28,105 +28,73 @@ const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:8545");
  * @returns {Promise<void>} Responds with the result of the data submission.
  */
 const submitData = async (req, res) => {
-  let filePath; // Declare filePath to store the temporary file path
-
+  let filePath;
   try {
-    // Extract file and user details from the request
     const file = req.files?.files;
-    const { clerkUserId, walletAddress } = req.body;
+    const { clerkUserId, walletAddress, modelId } = req.body;
 
     console.log("Request body:", req.body);
 
-    // Validate required fields
-    if (!clerkUserId || !walletAddress) {
-      return res.status(400).json({ message: "clerkUserId and walletAddress are required" });
+    if (!clerkUserId || !walletAddress || !modelId) {
+      return res.status(400).json({ message: "clerkUserId, walletAddress, and modelId are required" });
     }
 
-    // Validate file presence
     if (!file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    // Validate file type
     const allowedFileTypes = ['.csv', '.json', '.txt'];
     const fileExtension = path.extname(file.name).toLowerCase();
     if (!allowedFileTypes.includes(fileExtension)) {
       return res.status(400).json({ message: "Invalid file type. Only CSV, JSON, and TXT are allowed." });
     }
 
-    // Validate file size
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       return res.status(400).json({ message: "File size exceeds 10MB limit." });
     }
 
-    // Fetch user details from Convex using clerkUserId
     const user = await convex.query(api.users.getUserByClerkId, { clerkUserId });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Generate a unique ID for the submission
     const uniqueId = generateUniqueId(user.name, user.organization, user._id);
-
-    // Save the uploaded file to a temporary location
     filePath = await saveFileToTemp(file);
 
-    // Validate the data using the data validator
-    const validation = await validateData(filePath);
-
-    // If data is invalid, penalize the user and log the submission
-    if (validation.quality === "INVALID") {
-      const penalizeResult = await penalizeUser(uniqueId, walletAddress);
-      await convex.mutation(api.submissions.submitData, {
-        userId: user._id,
-        dataHash: "",
-        validationStatus: "INVALID",
-        validationIssues: validation.issues.join(", "),
-        datasetName: file.name,
-        transactionHash: penalizeResult.transactionHash,
-        walletAddress: walletAddress,
-        sector: user.sector,
-      });
-      return res.status(400).json({
-        message: "Data validation failed",
-        issues: validation.issues,
-        stats: validation.stats,
-      });
-    }
-
-    // If data is valid, upload it to IPFS via Pinata
+    // Upload to IPFS
     const ipfsHash = await uploadFileToPinata(filePath, {
       name: `${user.name}_${Date.now()}`,
-      keyvalues: {
-        userId: walletAddress,
-        organization: user.organization,
-        uniqueId,
-        validationStatus: validation.quality,
-      },
+      keyvalues: { userId: walletAddress, organization: user.organization, uniqueId },
     });
 
-    // Submit the data to the blockchain
+    // Submit to contract first
     const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
-
-    // Confirm the transaction
     const txReceipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
     if (!txReceipt || !txReceipt.status) {
       throw new Error("Blockchain transaction failed");
     }
 
-    // Log the successful submission in Convex
+    // Validate data
+    const validation = await validateData(filePath);
+    let penalizeResult;
+
+    if (validation.quality === "INVALID") {
+      penalizeResult = await penalizeUser(uniqueId, walletAddress); // Now works
+    }
+
     await convex.mutation(api.submissions.submitData, {
       userId: user._id,
       dataHash: ipfsHash,
       validationStatus: validation.quality,
+      validationIssues: validation.quality === "INVALID" ? validation.issues : undefined, 
       datasetName: file.name,
-      sector: user.sector,
-      transactionHash: tx.transactionHash,
+      transactionHash: penalizeResult?.transactionHash || tx.transactionHash,
       walletAddress: walletAddress,
+      sector: user.sector,
+      modelId,
     });
 
-    // Fetch updated reputation
     const updatedReputation = await getReputationService(walletAddress);
 
     // Respond with success
@@ -141,7 +109,6 @@ const submitData = async (req, res) => {
     console.error("Data submission error:", error);
     errorResponse(res, error.message, 500);
   } finally {
-    // Clean up: Delete the temporary file if it exists
     if (filePath) {
       try {
         await fs.unlink(filePath);

@@ -37,15 +37,22 @@ export const getUserByClerkId = query({
  * @returns {Promise<Array>} List of invalid submissions with associated user details.
  */
 export const InValidSubmissions = query({
-  args: {},
-  handler: async (ctx) => {
-    // Fetch submissions marked as INVALID
-    const invalidSubmissions = await ctx.db
+  args: {
+    modelId: v.optional(v.string()), // Optional modelId filter
+  },
+  handler: async (ctx, args) => { // Ensure args is passed here
+    let query = ctx.db
       .query("submissions")
-      .filter((q) => q.eq(q.field("validationStatus"), "INVALID"))
-      .collect();
+      .filter((q) => q.eq(q.field("validationStatus"), "INVALID"));
 
-    // Enrich each submission with user details (name and email)
+    // Apply modelId filter if provided
+    if (args.modelId) {
+      query = query.filter((q) => q.eq(q.field("modelId"), args.modelId));
+    }
+
+    const invalidSubmissions = await query.collect();
+
+    // Enrich each submission with user details
     const submissionsWithUsers = await Promise.all(
       invalidSubmissions.map(async (submission) => {
         const user = await ctx.db.get(submission.userId);
@@ -66,15 +73,22 @@ export const InValidSubmissions = query({
  * @returns {Promise<Array>} List of valid submissions with associated user details.
  */
 export const validSubmissions = query({
-  args: {},
-  handler: async (ctx) => {
-    // Fetch submissions marked as VALID
-    const validSubmissions = await ctx.db
+  args: {
+    modelId: v.optional(v.string()), // Optional modelId filter
+  },
+  handler: async (ctx, args) => { // Ensure args is passed here
+    let query = ctx.db
       .query("submissions")
-      .filter((q) => q.eq(q.field("validationStatus"), "VALID"))
-      .collect();
+      .filter((q) => q.eq(q.field("validationStatus"), "VALID"));
 
-    // Enrich each submission with user details (name and email)
+    // Apply modelId filter if provided
+    if (args.modelId) {
+      query = query.filter((q) => q.eq(q.field("modelId"), args.modelId));
+    }
+
+    const validSubmissions = await query.collect();
+
+    // Enrich each submission with user details
     const submissionsWithUsers = await Promise.all(
       validSubmissions.map(async (submission) => {
         const user = await ctx.db.get(submission.userId);

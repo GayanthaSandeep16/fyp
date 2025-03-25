@@ -37,11 +37,12 @@ export const submitData = mutation({
     userId: v.id("users"),
     dataHash: v.string(),
     validationStatus: v.string(),
-    validationIssues: v.optional(v.string()),
+    validationIssues: v.optional(v.array(v.string())),
     datasetName: v.string(),
     sector: v.string(),
     transactionHash: v.string(),
     walletAddress: v.string(),
+    modelId: v.string(),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("submissions", {

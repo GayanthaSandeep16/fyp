@@ -14,19 +14,21 @@ export default defineSchema({
     }).index("by_email", ["email"])
         .index("by_clerkUserId", ["clerkUserId"]),
 
-    submissions: defineTable({
-        userId: v.id("users"),
-        dataHash: v.string(),
-        validationStatus: v.union(v.literal("VALID"), v.literal("INVALID")),
-        validationIssues: v.optional(v.array(v.string())),
-        datasetName: v.string(),
-        sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
-        walletAddress: v.string(),
-        transactionHash: v.string(),
-        created_at: v.float64(),// Store as timestamp
-    }).index("by_userId", ["userId"])
-        .index("by_sector", ["sector"])
-        .index("by_status", ["validationStatus"]),
+        submissions: defineTable({
+            userId: v.id("users"),
+            dataHash: v.string(),
+            validationStatus: v.union(v.literal("VALID"), v.literal("INVALID")),
+            validationIssues: v.optional(v.array(v.string())),
+            datasetName: v.string(),
+            sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
+            walletAddress: v.string(),
+            transactionHash: v.string(),
+            created_at: v.float64(),
+            modelId: v.string(), 
+        }).index("by_userId", ["userId"])
+          .index("by_sector", ["sector"])
+          .index("by_status", ["validationStatus"])
+          .index("by_modelId", ["modelId"]),
 
     notifications: defineTable({
         userId: v.id("users"),
@@ -38,13 +40,15 @@ export default defineSchema({
         }).index("by_timestamp", ["timestamp"]),
 
         models: defineTable({
-            timestamp: v.number(),          
-            dataCount: v.number(),          
-            modelType: v.string(),         
-            accuracy: v.string(),          
-            f1Score: v.string(),           
-            precision: v.string(),         
-            recall: v.string(),            
-            status: v.string(),            
+            dataCount: v.number(),
+            modelType: v.string(),
+            accuracy: v.string(),
+            f1Score: v.string(),
+            precision: v.string(),
+            recall: v.string(),
+            status: v.string(),
+            modelFilePath: v.string(),
+            scalerFilePath: v.string(),
+            created_at: v.number(), 
           }),
 });
