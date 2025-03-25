@@ -102,8 +102,8 @@ const trainModel = async (req, res) => {
         });
 
         // Fetch valid and invalid submissions for notifications
-        const validUsers = await convex.query(api.users.getValidSubmissionsWithUsers, {});
-        const invalidUsers = await convex.query(api.users.getInvalidSubmissionsWithUsers, {});
+        const validUsers = await convex.query("users:validSubmissions", {});
+        const invalidUsers = await convex.query("users:InValidSubmissions", {});
 
         // Send notifications to users with all metrics
         const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics);
@@ -154,8 +154,8 @@ const trainModel = async (req, res) => {
 const getvalidUser = async (req, res) => {
   try {
     console.log("Fetching all invalid submissions from Convex...");
-    const allData = await convex.query(api.users.getInvalidSubmissionsWithUsers, {});
-
+    const allData = await convex.query("users:validSubmissions", {});
+    
     if (allData.length === 0) {
       return res.status(404).json({ error: "No invalid submissions found" });
     }
@@ -178,10 +178,11 @@ const getvalidUser = async (req, res) => {
 const getInvalidUser = async (req, res) => {
   try {
     console.log("Fetching all valid submissions from Convex...");
-    const allData = await convex.query(api.users.getValidSubmissionsWithUsers, {});
+    const allData = await convex.query("users:InValidSubmissions", {});
+
 
     if (allData.length === 0) {
-      return res.status(404).json({ error: "No valid submissions found" });
+      return res.status(200).json({ error: "No valid submissions found" });
     }
 
     res.status(200).json(allData);
