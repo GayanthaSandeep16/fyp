@@ -41,4 +41,3 @@ app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
 
-setInterval(cleanupTempDir, 60 * 60 * 1000);
