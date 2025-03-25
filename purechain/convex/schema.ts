@@ -23,7 +23,7 @@ export default defineSchema({
         sector: v.union(v.literal("Healthcare"), v.literal("Finance")),
         walletAddress: v.string(),
         transactionHash: v.string(),
-        submittedAt: v.number(), // Store as timestamp
+        created_at: v.float64(),// Store as timestamp
     }).index("by_userId", ["userId"])
         .index("by_sector", ["sector"])
         .index("by_status", ["validationStatus"]),

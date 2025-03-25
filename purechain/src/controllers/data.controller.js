@@ -135,7 +135,7 @@ const submitData = async (req, res) => {
       ipfsHash,
       transactionHash: tx.transactionHash,
       walletAddress,
-      reputation: updatedReputation.reputation,
+      reputation: updatedReputation.reputation.toString(),
     });
   } catch (error) {
     console.error("Data submission error:", error);

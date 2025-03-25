@@ -20,7 +20,7 @@ router.post('/submit-data', requireAuth, submitData);
  * Creates a new user (member) in the system.
  * Requires authentication.
  */
-router.post('/create-user', requireAuth, memberController.createUser);
+router.post('/create-user', memberController.createUser);
 
 /**
  * POST /train
