@@ -41,7 +41,6 @@ contract DataQuality {
         User storage user = users[msg.sender];
         
         if (user.submissionCount == 0) {
-            // New user
             user.name = name;
             user.organization = organization;
             user.uniqueId = uniqueId;
@@ -56,7 +55,6 @@ contract DataQuality {
             );
         }
 
-        require(!user.submittedIds[uniqueId], "Duplicate submission");
         user.submittedIds[uniqueId] = true;
 
         dataHashes[uniqueId] = ipfsHash;
