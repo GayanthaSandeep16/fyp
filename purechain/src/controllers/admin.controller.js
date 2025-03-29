@@ -96,9 +96,9 @@ const trainModel = async (req, res) => {
           precision: metrics.precision !== null ? metrics.precision.toString() : "N/A",
           recall: metrics.recall !== null ? metrics.recall.toString() : "N/A",
           status: "success",
-          timestamp: Date.now(),
           modelFilePath,
           scalerFilePath,
+          created_at: Date.now(), // Keep this, remove timestamp
         });
         // Fetch valid and invalid submissions for notifications
         const validUsers = await convex.query("users:validSubmissions", {});

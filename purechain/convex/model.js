@@ -15,15 +15,13 @@ export const saveModelDetails = mutation({
     precision: v.string(),
     recall: v.string(),
     status: v.string(),
-    timestamp: v.number(),
     modelFilePath: v.string(),
     scalerFilePath: v.string(),
+    created_at: v.number(),
   },
   handler: async (ctx, args) => {
-    // Insert the new model record into the "models" table
     return await ctx.db.insert("models", {
-      ...args,
-      // created_at: Date.now(), // Uncomment if you also add created_at to schema
+      ...args, // Now includes created_at from the args
     });
   },
 });
