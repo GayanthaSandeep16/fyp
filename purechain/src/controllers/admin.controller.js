@@ -3,7 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { spawn } from "child_process";
 import fs from "fs/promises";
 import path from "path";
-import { sendEmail } from "../utils/email.js"; // Import sendEmail for admin notifications
+import { sendEmail } from "../utils/email.js"; 
 import { fileURLToPath } from "url";
 
 // Derive __dirname equivalent for ES modules
