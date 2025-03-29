@@ -5,7 +5,6 @@
   "scripts": {
     "start": "node app.js",
     "test": "jest"
-    
   },
   "keywords": [],
   "author": "",
@@ -33,7 +32,6 @@
     "truffle": "^5.5.7",
     "web3": "^4.16.0"
   },
-  
   "devDependencies": {
     "@babel/core": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
