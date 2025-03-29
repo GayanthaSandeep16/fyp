@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"ganache-cli\" \"wait-on tcp:8545 && truffle migrate --config truffle-config.cjs && node app.js\"",
+    "start": "concurrently \"ganache-cli --deterministic\" \"wait-on tcp:8545 && truffle migrate --config truffle-config.cjs && node app.js\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

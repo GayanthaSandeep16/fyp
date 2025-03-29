@@ -28,6 +28,8 @@ const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:8545");
  * @returns {Promise<void>} Responds with the result of the data submission.
  */
 const submitData = async (req, res) => {
+  const startTime = Date.now();
+  console.log("Received request to submit data at:", new Date(startTime).toISOString());
   let filePath;
   try {
     const file = req.files?.files;
@@ -49,9 +51,9 @@ const submitData = async (req, res) => {
       return res.status(400).json({ message: "Invalid file type. Only CSV, JSON, and TXT are allowed." });
     }
 
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
-      return res.status(400).json({ message: "File size exceeds 10MB limit." });
+      return res.status(400).json({ message: "File size exceeds 50MB limit." });
     }
 
     const user = await convex.query(api.users.getUserByClerkId, { clerkUserId });
@@ -75,12 +77,16 @@ const submitData = async (req, res) => {
       throw new Error("Blockchain transaction failed");
     }
 
+    const validateStartTime = Date.now();
+    console.log("Validation start time at:", new Date(validateStartTime).toISOString());
     // Validate data
     const validation = await validateData(filePath);
+    const validationEndTime = Date.now();
+    console.log("Validation completed at:", new Date(validationEndTime).toISOString());
     let penalizeResult;
 
     if (validation.quality === "INVALID") {
-      penalizeResult = await penalizeUser(uniqueId, walletAddress); // Now works
+      penalizeResult = await penalizeUser(uniqueId, walletAddress); 
     }
 
     await convex.mutation(api.submissions.submitData, {
@@ -96,7 +102,8 @@ const submitData = async (req, res) => {
     });
 
     const updatedReputation = await getReputationService(walletAddress);
-
+    const endtime = Date.now();
+    console.log("submit end time at :", new Date(endtime).toISOString());
     // Respond with success
     successResponse(res, {
       message: "Data submitted successfully",

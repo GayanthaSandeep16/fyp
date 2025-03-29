@@ -19,7 +19,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(fileUpload({
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 50 * 1024 * 1024 }, // 5MB limit
     abortOnLimit: true,
 }));
 // Clerk middleware for authentication
