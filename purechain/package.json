@@ -29,7 +29,6 @@
     "react-dom": "^19.0.0",
     "solc": "^0.8.0",
     "truffle": "^5.5.7",
-    "type": "module",
     "web3": "^4.16.0"
   },
   "devDependencies": {
@@ -41,6 +40,5 @@
   "directories": {
     "test": "test"
   },
-  "description": "",
-  "type": "module"
+  "description": ""
 }

@@ -1,0 +1,34 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 10
+      arrivalRate: 1
+  processor: "./payload-generator.js"
+
+scenarios:
+  - name: "Working submission"
+    flow:
+      - log: "Generating test data"
+      - function: "generateTestData"
+      - log: "Submitting request with clerkUserId: {{ clerkUserId }}"
+      - post:
+          url: "/api/submit-data"
+          headers:
+            Content-Type: "multipart/form-data"
+          formData:
+            clerkUserId: "{{ clerkUserId }}"
+            walletAddress: "{{ walletAddress }}"
+            modelId: "{{ modelId }}"
+            files:
+              filename: "test.csv"
+              value: "{{ csvData }}"
+              contentType: "text/csv"
+          capture:
+            - json: "$.message"
+              as: "message"
+          expect:
+            - statusCode: 200
+              contentType: "application/json"
+              equals:
+                - "{{ message }}"
+                - "Data submitted successfully"

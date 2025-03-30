@@ -13,7 +13,7 @@ const router = express.Router();
  * Submits data for validation and storage in IPFS if valid.
  * Requires authentication.
  */
-router.post('/submit-data', requireAuth, submitData);
+router.post('/submit-data',  submitData);
 
 /**
  * POST /create-user

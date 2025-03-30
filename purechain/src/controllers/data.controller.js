@@ -32,8 +32,12 @@ const submitData = async (req, res) => {
   console.log("Received request to submit data at:", new Date(startTime).toISOString());
   let filePath;
   try {
+    cleark
     const file = req.files?.files;
-    const { clerkUserId, walletAddress, modelId } = req.body;
+    const clerkUserId = req.body.clerkUserId;
+    const walletAddress = req.body.walletAddress;
+    const modelId = req.body.modelId; 
+
 
     console.log("Request body:", req.body);
 
