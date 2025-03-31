@@ -32,10 +32,10 @@ const trainModel = async (req, res) => {
     }
 
     console.log(`Fetching all valid data for model ${modelId} from Convex...`);
-    const allData = await convex.query("users:validSubmissions", { modelId });
+    const allData = await fetchAllValidData(modelId);
 
     // Check if there’s enough valid data to train on (minimum 2 samples for train-test split)
-    if (allData.length < 1) {
+    if (allData.length < 2 ) {
       return res.status(400).json({ 
         error: `Insufficient data for training ${modelId}. At least 2 valid submissions are required, but found ${allData.length}.`
       });
@@ -101,8 +101,7 @@ const trainModel = async (req, res) => {
           status: "success",
           modelFilePath,
           scalerFilePath,
-          created_at: Date.now(),
-          modelId,
+          created_at: Date.now()
         });
 
         const validUsers = await convex.query("users:validSubmissions", { modelId });
@@ -111,7 +110,6 @@ const trainModel = async (req, res) => {
 
         res.status(200).json({
           message: `RandomForest model trained successfully for ${modelId}`,
-          modelId: savedModelId,
           modelVersion: modelVersion.toString(),
           dataCount: allData.length,
           modelType: "RandomForest",

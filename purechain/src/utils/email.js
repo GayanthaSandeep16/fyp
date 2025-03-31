@@ -30,7 +30,7 @@ export const sendEmail = async (to, subject, htmlContent) => {
         </div>
         <p style="font-size: 14px; color: #777; margin-top: 20px;">
           Best regards,<br/>
-          Your Platform Team
+          From PureChain Team
         </p>
       </div>
     `,

@@ -13,82 +13,150 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
  * Fetches all valid submissions from Convex, retrieves the data from IPFS, and standardizes it for training.
  * @returns {Promise<Array>} Array of standardized data rows.
  */
-async function fetchAllValidData() {
+/**
+ * fetchAllValidData
+ * Fetches all valid submissions for a specific modelId and retrieves the actual data.
+ * @param {string} modelId - The ID of the model to fetch data for.
+ * @returns {Promise<Array>} Array of data rows ready for training.
+ */
+async function fetchAllValidData(modelId) {
   try {
-    const validatedData = await convex.query("submissions:getValidatedData", { quality: "VALID" });
-    const filteredData = validatedData.filter(hash => hash !== 'QmVzJEAuVPsULq1r7tqa3g5dJEwKpuEUYfzFWnDFhfgC25');
-    const allData = [];
+    if (!modelId) {
+      throw new Error("Model ID is required, bro!");
+    }
 
-    for (const entry of filteredData) {
-      console.log(`Retrieving data from IPFS hash: ${entry}`);
-      let result;
-      try {
-        result = await retry(
-          () => retrieveFileFromIPFS(entry),
-          { retries: 3, factor: 2, minTimeout: 1000, maxTimeout: 5000 }
-        );
-      } catch (error) {
-        console.error(`Failed to retrieve data from IPFS hash ${entry}:`, error);
+    console.log(`Grabbing valid data for model ${modelId}...`);
+    
+    const validatedData = await convex.query("users:validSubmissions", { modelId });
+
+    if (!validatedData || validatedData.length === 0) {
+      console.log(`No valid data found for model ${modelId}`);
+      return [];
+    }
+
+    const allData = [];
+    let glucoseValues = []; // To compute mean glucose for imputation
+
+    // First pass: Collect glucose values from Dataset 2
+    for (const entry of validatedData) {
+      const ipfsHash = entry.dataHash || entry.ipfsHash;
+      if (!ipfsHash) {
+        console.error(`No IPFS hash found in entry:`, entry);
         continue;
       }
 
-      let csvText;
-      if (typeof result === 'string') {
-        csvText = result;
-      } else if (Buffer.isBuffer(result)) {
-        csvText = result.toString('utf8');
-      } else if (typeof result === 'object' && result.path) {
-        csvText = await fs.readFile(result.path, 'utf8');
-      } else if (typeof result === 'object') {
-        csvText = await fs.readFile(`./retrieved-${entry}.txt`, 'utf8');
-        await fs.unlink(`./retrieved-${entry}.txt`);
-      } else {
-        throw new Error(`Unexpected return type from IPFS: ${typeof result}`);
+      console.log(`Fetching from IPFS with hash: ${ipfsHash}`);
+      let result;
+      try {
+        result = await retry(
+          () => retrieveFileFromIPFS(ipfsHash),
+          { retries: 2, factor: 2, minTimeout: 1000, maxTimeout: 5000 }
+        );
+      } catch (error) {
+        console.error(`IPFS fetch failed for hash ${ipfsHash}:`, error);
+        continue;
       }
 
-      const parsed = parse(csvText, { header: true, skipEmptyLines: true, dynamicTyping: true });
-
-      // Map headers and standardize target
-      const mappedData = parsed.data.map(row => {
-        let targetValue;
-        const rawTarget = row.diabetes || row.CLASS || row.Outcome;
-        if (typeof rawTarget === 'string') {
-          targetValue = rawTarget.toUpperCase() === 'Y' ? 1 : rawTarget.toUpperCase() === 'N' ? 0 : rawTarget;
-        } else {
-          targetValue = rawTarget; // Assume numeric (0 or 1)
-        }
-        targetValue = targetValue === 1 || targetValue === '1' ? 1 : 0; // Final binary conversion
-
-        return {
-          gender: row.gender || row.Gender,
-          age: row.age || row.AGE || row.Age,
-          bmi: row.bmi || row.BMI,
-          hba1c: row.HbA1c || row.HbA1c_level || row.hba1c,
-          glucose: row.blood_glucose_level || row.Glucose || row.glucose,
-          target: targetValue,
-        };
-      });
-
-      // Filter out rows with missing critical fields
-      const requiredColumns = ['gender', 'age', 'bmi', 'target'];
-      const cleanedData = mappedData.filter(row => 
-        requiredColumns.every(col => row[col] !== undefined)
-      );
-
-      // Log data quality
-      const totalRows = mappedData.length;
-      const cleanedRows = cleanedData.length;
-      const dropPercentage = totalRows > 0 ? ((totalRows - cleanedRows) / totalRows) * 100 : 0;
-      console.log(`Dropped ${dropPercentage.toFixed(2)}% of rows due to missing critical fields`);
-
-      allData.push(...cleanedData);
+      if (Array.isArray(result)) {
+        result.forEach(row => {
+          if ('diabetes' in row && row.blood_gluc) {
+            const glucose = parseFloat(row.blood_gluc);
+            if (!isNaN(glucose)) {
+              glucoseValues.push(glucose);
+            }
+          }
+        });
+      }
     }
 
-    console.log(`Total cleaned rows: ${allData.length}`);
-    console.log("Sample cleaned data:", allData.slice(0, 2));
+    // Compute mean glucose for imputation
+    const meanGlucose = glucoseValues.length > 0 
+      ? glucoseValues.reduce((sum, val) => sum + val, 0) / glucoseValues.length 
+      : 0;
+    console.log(`Mean glucose for imputation: ${meanGlucose}`);
+
+    // Second pass: Standardize data and impute glucose for Dataset 1
+    for (const entry of validatedData) {
+      const ipfsHash = entry.dataHash || entry.ipfsHash;
+      if (!ipfsHash) continue;
+
+      let result;
+      try {
+        result = await retry(
+          () => retrieveFileFromIPFS(ipfsHash),
+          { retries: 2, factor: 2, minTimeout: 1000, maxTimeout: 5000 }
+        );
+      } catch (error) {
+        console.error(`IPFS fetch failed for hash ${ipfsHash}:`, error);
+        continue;
+      }
+
+      if (Array.isArray(result)) {
+        const standardizedData = result.map(row => {
+          if ('CLASS' in row) {
+            const targetValue = row.CLASS && typeof row.CLASS === 'string' 
+              ? row.CLASS.toUpperCase() === 'N' ? 0 : 1 
+              : null;
+            if (targetValue === null) {
+              console.warn(`Invalid CLASS value in row:`, row);
+              return null;
+            }
+            return {
+              gender: row.Gender && typeof row.Gender === 'string' 
+                ? row.Gender.toUpperCase() === 'M' ? 1 : 0 
+                : 0,
+              age: parseFloat(row.AGE) || 0,
+              bmi: parseFloat(row.BMI) || 0,
+              hba1c: parseFloat(row.HbA1c) || 0,
+              glucose: meanGlucose, // Impute glucose
+              target: targetValue
+            };
+          } else if ('diabetes' in row) {
+            const targetValue = row.diabetes != null 
+              ? parseInt(row.diabetes) === 1 ? 1 : 0 
+              : null;
+            if (targetValue === null) {
+              console.warn(`Invalid diabetes value in row:`, row);
+              return null;
+            }
+            return {
+              gender: row.gender && typeof row.gender === 'string' 
+                ? row.gender.toLowerCase() === 'male' ? 1 : 0 
+                : 0,
+              age: parseFloat(row.age) || 0,
+              bmi: parseFloat(row.bmi) || 0,
+              hba1c: parseFloat(row.HbA1c_lev) || 0,
+              glucose: parseFloat(row.blood_gluc) || meanGlucose,
+              target: targetValue
+            };
+          } else {
+            console.error(`Row does not match expected format:`, row);
+            return null;
+          }
+        }).filter(row => row !== null);
+
+        allData.push(...standardizedData);
+      } else {
+        console.error(`Expected array from IPFS for hash ${ipfsHash}, got:`, typeof result);
+        continue;
+      }
+    }
+
+    console.log(`Got ${allData.length} rows for model ${modelId}, bro!`);
+    if (allData.length > 0) {
+      console.log("Here’s a sneak peek:", allData.slice(0, 2));
+      // Log class distribution
+      const targetCounts = allData.reduce((counts, row) => {
+        counts[row.target] = (counts[row.target] || 0) + 1;
+        return counts;
+      }, {});
+      console.log("Class distribution:", targetCounts);
+    } else {
+      console.warn(`No valid rows remain after cleaning for model ${modelId}`);
+    }
     return allData;
   } catch (error) {
-    console.error("Error fetching valid data:", error);
+    console.error(`Something went wrong fetching data for model ${modelId}:`, error);
     throw error;
   }
 }
@@ -102,7 +170,12 @@ async function fetchAllValidData() {
 async function dataToCsvString(data) {
   if (data.length === 0) return "";
 
-  const headers = ['gender', 'age', 'bmi', 'hba1c', 'glucose', 'target'];
+  // Check if the dataset has a 'glucose' field (Dataset 2) or not (Dataset 1)
+  const hasGlucose = data.some(row => row.glucose !== undefined && row.glucose !== null);
+  const headers = hasGlucose 
+    ? ['gender', 'age', 'bmi', 'hba1c', 'glucose', 'target']
+    : ['gender', 'age', 'bmi', 'hba1c', 'target'];
+
   const escapeCsvValue = (value) => {
     if (value == null) return "";
     const str = String(value);
@@ -111,6 +184,7 @@ async function dataToCsvString(data) {
     }
     return str;
   };
+
   const rows = data.map(row =>
     headers.map(header => escapeCsvValue(row[header])).join(",")
   );
