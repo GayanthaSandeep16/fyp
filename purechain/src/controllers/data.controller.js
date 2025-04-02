@@ -71,6 +71,7 @@ const submitData = async (req, res) => {
     });
 
     // Submit to contract first
+    // Submit to contract
     const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
     const txReceipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
     if (!txReceipt || !txReceipt.status) {
@@ -79,36 +80,104 @@ const submitData = async (req, res) => {
 
     const validateStartTime = Date.now();
     console.log("Validation start time at:", new Date(validateStartTime).toISOString());
-    // Validate data
     const validation = await validateData(filePath);
     const validationEndTime = Date.now();
     console.log("Validation completed at:", new Date(validationEndTime).toISOString());
-    let penalizeResult;
 
-    if (validation.quality === "INVALID") {
-      penalizeResult = await penalizeUser(uniqueId, walletAddress); 
-    }
-
-    await convex.mutation(api.submissions.submitData, {
+    // Save submission
+    const submissionId = await convex.mutation(api.submissions.submitData, {
       userId: user._id,
       dataHash: ipfsHash,
       validationStatus: validation.quality,
-      validationIssues: validation.quality === "INVALID" ? validation.issues : undefined, 
+      validationIssues: validation.quality === "INVALID" ? validation.issues : undefined,
       datasetName: file.name,
-      transactionHash: penalizeResult?.transactionHash || tx.transactionHash,
+      transactionHash: tx.transactionHash, // Initial submission transaction
       walletAddress: walletAddress,
       sector: user.sector,
-      modelId,
+      modelId
     });
 
+    // Log submission transaction
+    await convex.mutation("transactions:logTransaction", {
+      txHash: tx.transactionHash,
+      type: "SUBMISSION",
+      userId: user._id,
+      walletAddress,
+      uniqueId,
+      ipfsHash,
+      submissionId,
+      status: txReceipt.status ? "SUCCESS" : "FAILED",
+      blockNumber: txReceipt.blockNumber.toString(),
+      eventName: "DataSubmitted",
+      eventArgs: { uniqueId, ipfsHash },
+      created_at: Date.now()
+    });
+
+    // Log reward transaction (happens with every successful submission in smart contract)
+    await convex.mutation("transactions:logTransaction", {
+      txHash: tx.transactionHash, // Same tx as submission
+      type: "REWARD",
+      userId: user._id,
+      walletAddress,
+      uniqueId,
+      ipfsHash,
+      submissionId,
+      status: txReceipt.status ? "SUCCESS" : "FAILED",
+      blockNumber: txReceipt.blockNumber.toString(),
+      eventName: "UserRewarded",
+      eventArgs: { uniqueId, reputationGain: "2" }, 
+      created_at: Date.now()
+    });
+
+    let penalizeResult;
+    if (validation.quality === "INVALID") {
+      penalizeResult = await penalizeUser(uniqueId, walletAddress);
+      const penalizeReceipt = await web3.eth.getTransactionReceipt(penalizeResult.transactionHash);
+
+      // Log penalization transaction
+      await convex.mutation("transactions:logTransaction", {
+        txHash: penalizeResult.transactionHash,
+        type: "PENALIZE",
+        userId: user._id,
+        walletAddress,
+        uniqueId,
+        ipfsHash: null,
+        submissionId,
+        status: penalizeReceipt.status ? "SUCCESS" : "FAILED",
+        blockNumber: penalizeReceipt.blockNumber.toString(),
+        eventName: "UserPenalized",
+        eventArgs: { uniqueId },
+        created_at: Date.now()
+      });
+
+      // Check if blacklisted and log if applicable
+      const userDetails = await getReputationService(walletAddress);
+      if (userDetails.reputation < 0) {
+        await convex.mutation("transactions:logTransaction", {
+          txHash: penalizeResult.transactionHash,
+          type: "BLACKLIST",
+          userId: user._id,
+          walletAddress,
+          uniqueId,
+          ipfsHash: null,
+          submissionId,
+          status: penalizeReceipt.status ? "SUCCESS" : "FAILED",
+          blockNumber: penalizeReceipt.blockNumber.toString(),
+          eventName: "UserBlacklisted",
+          eventArgs: { uniqueId },
+        });
+      }
+    }
+
     const updatedReputation = await getReputationService(walletAddress);
-    const endtime = Date.now();
-    console.log("submit end time at :", new Date(endtime).toISOString());
-    // Respond with success
+    const endTime = Date.now();
+    console.log("submit end time at:", new Date(endTime).toISOString());
+
     successResponse(res, {
       message: "Data submitted successfully",
       ipfsHash,
-      transactionHash: tx.transactionHash,
+      submissionTxHash: tx.transactionHash,
+      penalizeTxHash: penalizeResult?.transactionHash,
       walletAddress,
       reputation: updatedReputation.reputation.toString(),
     });

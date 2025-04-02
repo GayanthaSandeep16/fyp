@@ -8,6 +8,21 @@ const contract = new web3.eth.Contract(
   process.env.CONTRACT_ADDRESS // This is correct as the contract address
 );
 
+export const recordTransaction = async (modelId, walletAddress) => {
+  try {
+    const contract = new web3.eth.Contract(DataQualityArtifact.abi, process.env.CONTRACT_ADDRESS);
+    const tx = await contract.methods.logTraining(modelId).send({
+      from: walletAddress,
+      gas: 3000000,
+    });
+    const txReceipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
+    return txReceipt; // Return the receipt for use in trainModel
+  } catch (error) {
+    console.error("Error recording transaction:", error);
+    throw new Error(`Failed to record transaction: ${error.message}`);
+  }
+};
+
 // Submit data to the contract using the user's wallet address
 export const submitDataToContract = async (name, organization, uniqueId, ipfsHash, walletAddress) => {
   try {

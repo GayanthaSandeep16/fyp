@@ -17,6 +17,8 @@ import type * as model from "../model.js";
 import type * as notification from "../notification.js";
 import type * as submissions from "../submissions.js";
 import type * as tasks from "../tasks.js";
+import type * as trainingRuns from "../trainingRuns.js";
+import type * as transactions from "../transactions.js";
 import type * as users from "../users.js";
 
 /**
@@ -32,6 +34,8 @@ declare const fullApi: ApiFromModules<{
   notification: typeof notification;
   submissions: typeof submissions;
   tasks: typeof tasks;
+  trainingRuns: typeof trainingRuns;
+  transactions: typeof transactions;
   users: typeof users;
 }>;
 export declare const api: FilterApi<

@@ -1,4 +1,5 @@
 import { fetchAllValidData, sendNotifications, dataToCsvString } from "../services/admin.service.js";
+import { recordTransaction } from "../services/blockchain.service.js";
 import { ConvexHttpClient } from "convex/browser";
 import { spawn } from "child_process";
 import fs from "fs/promises";
@@ -24,6 +25,7 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
  */
 const trainModel = async (req, res) => {
   let tempFilePath;
+  const user = req.user; 
 
   try {
     const { modelId } = req.body;
@@ -90,6 +92,38 @@ const trainModel = async (req, res) => {
         const scalerFilePath = path.join(__dirname, `../../scaler_${modelVersion}.pkl`);
         await fs.rename(path.join(__dirname, "../../rf_model.pkl"), modelFilePath);
         await fs.rename(path.join(__dirname, "../../scaler.pkl"), scalerFilePath);
+
+
+        const txReceipt = await recordTransaction(modelId, user.walletAddress);
+       
+        const trainingRunId = await convex.mutation("trainingRuns:logTrainingRun", {
+          modelId,
+          triggeredByUserId: user._id,
+          triggeredByWalletAddress: user.walletAddress,
+          duration,
+          dataCount: allData.length,
+          metrics,
+          status: metrics.f1Score && metrics.f1Score < 0.7 ? "LOW_PERFORMANCE" : "SUCCESS",
+          errorMessage: null,
+          modelFilePath,
+          scalerFilePath,
+          trainingTxHash: txReceipt.transactionHash,
+        });
+
+        await convex.mutation("transactions:logTransaction", {
+          txHash: tx.transactionHash,
+          type: "TRAINING",
+          userId: user._id,
+          walletAddress: user.walletAddress,
+          uniqueId: `${modelId}_${modelVersion}`,
+          ipfsHash: null, // No IPFS upload
+          submissionId: null,
+          status: txReceipt.status ? "SUCCESS" : "FAILED",
+          blockNumber: txReceipt.blockNumber.toString(),
+          eventName: "ModelTrained",
+          eventArgs: { modelId },
+        });
+
 
         const savedModelId = await convex.mutation("model:saveModelDetails", {
           dataCount: allData.length,
