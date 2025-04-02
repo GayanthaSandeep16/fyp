@@ -8,11 +8,7 @@ const { parse } = pkg;
 
 const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 
-/**
- * fetchAllValidData
- * Fetches all valid submissions from Convex, retrieves the data from IPFS, and standardizes it for training.
- * @returns {Promise<Array>} Array of standardized data rows.
- */
+
 /**
  * fetchAllValidData
  * Fetches all valid submissions for a specific modelId and retrieves the actual data.
@@ -35,9 +31,16 @@ async function fetchAllValidData(modelId) {
     }
 
     const allData = [];
-    let glucoseValues = []; // To compute mean glucose for imputation
+    let glucoseValues = [];
+    let bloodPressureValues = [];
+    let insulinValues = [];
+    let dpfValues = [];
+    let cholValues = [];
+    let hdlValues = [];
+    let ldlValues = [];
+    let hba1cValues = [];
 
-    // First pass: Collect glucose values from Dataset 2
+    // First pass: Collect values for imputation
     for (const entry of validatedData) {
       const ipfsHash = entry.dataHash || entry.ipfsHash;
       if (!ipfsHash) {
@@ -59,23 +62,70 @@ async function fetchAllValidData(modelId) {
 
       if (Array.isArray(result)) {
         result.forEach(row => {
-          if ('diabetes' in row && row.blood_gluc) {
+          if ('diabetes' in row && row.blood_gluc) { // Dataset 2
             const glucose = parseFloat(row.blood_gluc);
-            if (!isNaN(glucose)) {
-              glucoseValues.push(glucose);
-            }
+            if (!isNaN(glucose)) glucoseValues.push(glucose);
+            const hba1c = parseFloat(row.HbA1c_lev);
+            if (!isNaN(hba1c)) hba1cValues.push(hba1c);
+          } else if ('Outcome' in row && row.Glucose) { // Dataset 3
+            const glucose = parseFloat(row.Glucose);
+            if (!isNaN(glucose)) glucoseValues.push(glucose);
+            const bloodPressure = parseFloat(row.BloodPressure);
+            if (!isNaN(bloodPressure)) bloodPressureValues.push(bloodPressure);
+            const insulin = parseFloat(row.Insulin);
+            if (!isNaN(insulin) && insulin !== 0) insulinValues.push(insulin);
+            const dpf = parseFloat(row.DiabetesPedigreeFunction);
+            if (!isNaN(dpf)) dpfValues.push(dpf);
+          } else if ('CLASS' in row) { // Dataset 1
+            const chol = parseFloat(row.Chol);
+            if (!isNaN(chol)) cholValues.push(chol);
+            const hdl = parseFloat(row.HDL);
+            if (!isNaN(hdl)) hdlValues.push(hdl);
+            const ldl = parseFloat(row.LDL);
+            if (!isNaN(ldl)) ldlValues.push(ldl);
+            const hba1c = parseFloat(row.HbA1c);
+            if (!isNaN(hba1c)) hba1cValues.push(hba1c);
           }
         });
       }
     }
 
-    // Compute mean glucose for imputation
+    // Compute means for imputation
     const meanGlucose = glucoseValues.length > 0 
       ? glucoseValues.reduce((sum, val) => sum + val, 0) / glucoseValues.length 
       : 0;
-    console.log(`Mean glucose for imputation: ${meanGlucose}`);
+    const meanBloodPressure = bloodPressureValues.length > 0 
+      ? bloodPressureValues.reduce((sum, val) => sum + val, 0) / bloodPressureValues.length 
+      : 0;
+    const meanInsulin = insulinValues.length > 0 
+      ? Math.min(insulinValues.reduce((sum, val) => sum + val, 0) / insulinValues.length, 15) // Cap at 15
+      : 15; // Default to 15 if no values
+    const meanDpf = dpfValues.length > 0 
+      ? dpfValues.reduce((sum, val) => sum + val, 0) / dpfValues.length 
+      : 0;
+    const meanChol = cholValues.length > 0 
+      ? cholValues.reduce((sum, val) => sum + val, 0) / cholValues.length 
+      : 0;
+    const meanHdl = hdlValues.length > 0 
+      ? hdlValues.reduce((sum, val) => sum + val, 0) / hdlValues.length 
+      : 0;
+    const meanLdl = ldlValues.length > 0 
+      ? ldlValues.reduce((sum, val) => sum + val, 0) / ldlValues.length 
+      : 0;
+    const meanHba1c = hba1cValues.length > 0 
+      ? hba1cValues.reduce((sum, val) => sum + val, 0) / hba1cValues.length 
+      : 0;
 
-    // Second pass: Standardize data and impute glucose for Dataset 1
+    console.log(`Mean glucose for imputation: ${meanGlucose}`);
+    console.log(`Mean blood pressure for imputation: ${meanBloodPressure}`);
+    console.log(`Mean insulin for imputation: ${meanInsulin}`);
+    console.log(`Mean diabetes pedigree function for imputation: ${meanDpf}`);
+    console.log(`Mean cholesterol for imputation: ${meanChol}`);
+    console.log(`Mean HDL for imputation: ${meanHdl}`);
+    console.log(`Mean LDL for imputation: ${meanLdl}`);
+    console.log(`Mean HbA1c for imputation: ${meanHba1c}`);
+
+    // Second pass: Standardize data and impute missing features
     for (const entry of validatedData) {
       const ipfsHash = entry.dataHash || entry.ipfsHash;
       if (!ipfsHash) continue;
@@ -93,7 +143,7 @@ async function fetchAllValidData(modelId) {
 
       if (Array.isArray(result)) {
         const standardizedData = result.map(row => {
-          if ('CLASS' in row) {
+          if ('CLASS' in row) { // Dataset 1
             const targetValue = row.CLASS && typeof row.CLASS === 'string' 
               ? row.CLASS.toUpperCase() === 'N' ? 0 : 1 
               : null;
@@ -107,11 +157,17 @@ async function fetchAllValidData(modelId) {
                 : 0,
               age: parseFloat(row.AGE) || 0,
               bmi: parseFloat(row.BMI) || 0,
-              hba1c: parseFloat(row.HbA1c) || 0,
-              glucose: meanGlucose, // Impute glucose
+              hba1c: parseFloat(row.HbA1c) || meanHba1c,
+              glucose: meanGlucose,
+              bloodPressure: meanBloodPressure,
+              insulin: meanInsulin,
+              diabetesPedigreeFunction: meanDpf,
+              chol: parseFloat(row.Chol) || meanChol,
+              hdl: parseFloat(row.HDL) || meanHdl,
+              ldl: parseFloat(row.LDL) || meanLdl,
               target: targetValue
             };
-          } else if ('diabetes' in row) {
+          } else if ('diabetes' in row) { // Dataset 2
             const targetValue = row.diabetes != null 
               ? parseInt(row.diabetes) === 1 ? 1 : 0 
               : null;
@@ -125,8 +181,36 @@ async function fetchAllValidData(modelId) {
                 : 0,
               age: parseFloat(row.age) || 0,
               bmi: parseFloat(row.bmi) || 0,
-              hba1c: parseFloat(row.HbA1c_lev) || 0,
+              hba1c: parseFloat(row.HbA1c_lev) || meanHba1c,
               glucose: parseFloat(row.blood_gluc) || meanGlucose,
+              bloodPressure: meanBloodPressure,
+              insulin: meanInsulin,
+              diabetesPedigreeFunction: meanDpf,
+              chol: meanChol,
+              hdl: meanHdl,
+              ldl: meanLdl,
+              target: targetValue
+            };
+          } else if ('Outcome' in row) { // Dataset 3
+            const targetValue = row.Outcome != null 
+              ? parseInt(row.Outcome) === 1 ? 1 : 0 
+              : null;
+            if (targetValue === null) {
+              console.warn(`Invalid Outcome value in row:`, row);
+              return null;
+            }
+            return {
+              gender: row.Pregnancies > 0 ? 0 : 1, // Infer gender: Pregnancies > 0 implies female
+              age: parseFloat(row.Age) || 0,
+              bmi: parseFloat(row.BMI) || 0,
+              hba1c: meanHba1c, // Not present in Dataset 3, impute
+              glucose: parseFloat(row.Glucose) || meanGlucose,
+              bloodPressure: parseFloat(row.BloodPressure) || meanBloodPressure,
+              insulin: parseFloat(row.Insulin) || meanInsulin,
+              diabetesPedigreeFunction: parseFloat(row.DiabetesPedigreeFunction) || meanDpf,
+              chol: meanChol,
+              hdl: meanHdl,
+              ldl: meanLdl,
               target: targetValue
             };
           } else {
@@ -145,7 +229,6 @@ async function fetchAllValidData(modelId) {
     console.log(`Got ${allData.length} rows for model ${modelId}, bro!`);
     if (allData.length > 0) {
       console.log("Here’s a sneak peek:", allData.slice(0, 2));
-      // Log class distribution
       const targetCounts = allData.reduce((counts, row) => {
         counts[row.target] = (counts[row.target] || 0) + 1;
         return counts;
@@ -170,11 +253,10 @@ async function fetchAllValidData(modelId) {
 async function dataToCsvString(data) {
   if (data.length === 0) return "";
 
-  // Check if the dataset has a 'glucose' field (Dataset 2) or not (Dataset 1)
-  const hasGlucose = data.some(row => row.glucose !== undefined && row.glucose !== null);
-  const headers = hasGlucose 
-    ? ['gender', 'age', 'bmi', 'hba1c', 'glucose', 'target']
-    : ['gender', 'age', 'bmi', 'hba1c', 'target'];
+  const headers = [
+    'gender', 'age', 'bmi', 'hba1c', 'glucose', 'bloodPressure', 'insulin',
+    'diabetesPedigreeFunction', 'chol', 'hdl', 'ldl', 'target'
+  ];
 
   const escapeCsvValue = (value) => {
     if (value == null) return "";
@@ -189,7 +271,9 @@ async function dataToCsvString(data) {
     headers.map(header => escapeCsvValue(row[header])).join(",")
   );
 
-  return [headers.join(","), ...rows].join("\n");
+  const csvContent = [headers.join(","), ...rows].join("\n");
+  console.log("CSV content preview:", csvContent.slice(0, 500)); // Log first 500 characters of CSV
+  return csvContent;
 }
 
 /**
