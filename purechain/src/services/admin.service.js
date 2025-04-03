@@ -15,15 +15,19 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
  * @param {string} modelId - The ID of the model to fetch data for.
  * @returns {Promise<Array>} Array of data rows ready for training.
  */
-async function fetchAllValidData(modelId) {
+async function fetchAllValidData(modelId,sector) {
   try {
     if (!modelId) {
       throw new Error("Model ID is required, bro!");
     }
 
-    console.log(`Grabbing valid data for model ${modelId}...`);
+    console.log(`Grabbing valid data for model ${modelId}... and sector ${sector}`);
     
-    const validatedData = await convex.query("users:validSubmissions", { modelId });
+    const validatedData = await convex.query("submissions:getValidatedData", {
+      modelId,
+      quality: "VALID",
+      sector,
+    });
 
     if (!validatedData || validatedData.length === 0) {
       console.log(`No valid data found for model ${modelId}`);

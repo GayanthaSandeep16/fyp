@@ -22,18 +22,11 @@ contract DataQuality {
     address[] public userAddresses;
     TrainingEvent[] public trainingEvents;
 
-    event UserPenalized(address indexed user, string uniqueId);
+    event UserPenalized(address indexed user, string uniqueId, int256 reputationLoss); 
     event DataSubmitted(address indexed user, string uniqueId, string ipfsHash);
     event UserBlacklisted(address indexed user, string uniqueId);
-    event UserRewarded(
-        address indexed user,
-        string uniqueId,
-        uint256 reputationGain
-    );
-    event ModelTrained(
-        address indexed trainer,
-        string modelId
-    );
+    event UserRewarded(address indexed user, string uniqueId, uint256 reputationGain);
+    event ModelTrained(address indexed trainer, string modelId);
 
     uint256 public constant INITIAL_REPUTATION = 1;
     int256 public constant REPUTATION_LOSS = 1;
@@ -83,7 +76,7 @@ contract DataQuality {
             emit UserBlacklisted(msg.sender, uniqueId);
         }
 
-        emit UserPenalized(msg.sender, uniqueId);
+        emit UserPenalized(msg.sender, uniqueId, REPUTATION_LOSS); 
     }
 
     function getUserCount() public view returns (uint256) {
@@ -94,9 +87,7 @@ contract DataQuality {
         return users[msg.sender].reputation;
     }
 
-    function logTraining(
-        string memory modelId
-    ) public notBlacklisted {
+    function logTraining(string memory modelId) public notBlacklisted {
         require(bytes(modelId).length > 0, "Model ID required");
         trainingEvents.push(
             TrainingEvent({

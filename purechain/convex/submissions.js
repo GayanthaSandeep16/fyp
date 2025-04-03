@@ -21,21 +21,30 @@ export const getUserSubmissions = query({
 
 // Get all validated data
 export const getValidatedData = query({
-  args: { quality: v.string() },
+  args: {
+    quality: v.string(),
+    modelId: v.string(),
+    sector: v.string(),
+  },
   handler: async (ctx, args) => {
     const results = await ctx.db
       .query("submissions")
-      .filter((q) => q.eq(q.field("validationStatus"), args.quality))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("validationStatus"), args.quality),
+          q.eq(q.field("modelId"), args.modelId),
+          q.eq(q.field("sector"), args.sector)
+        )
+      )
       .collect();
-    return [...new Set(results.map(submission => submission.dataHash))];
+    return [...new Set(results.map((submission) => submission.dataHash))];
   },
 });
-
 // Submit new data
 export const submitData = mutation({
   args: {
     userId: v.id("users"),
-    dataHash: v.string(),
+    dataHash: v.optional(v.string()),
     validationStatus: v.string(),
     validationIssues: v.optional(v.array(v.string())),
     datasetName: v.string(),

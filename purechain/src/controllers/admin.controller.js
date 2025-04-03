@@ -4,7 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { spawn } from "child_process";
 import fs from "fs/promises";
 import path from "path";
-import { sendEmail } from "../utils/email.js"; 
+import { sendEmail } from "../utils/email.js";
 import { fileURLToPath } from "url";
 
 // Derive __dirname equivalent for ES modules
@@ -26,19 +26,32 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 const trainModel = async (req, res) => {
   let tempFilePath;
   const user = req.user;
+  const sector = req.body.sector
+  const modelId = req.body.modelId
+
+  let formattedSector = sector;
+  if (sector === "healthcare") {
+    formattedSector = "Healthcare";
+  } else if (sector === "finance") {
+    formattedSector = "Finance";
+  }
+  console.log(formattedSector)
 
   try {
-    const { modelId } = req.body;
+
     if (!modelId) {
       return res.status(400).json({ error: "Model ID is required" });
     }
+    if (!sector || !["healthcare", "finance"].includes(sector)) {
+      return res.status(400).json({ error: "Sector is required and must be 'healthcare' or 'finance'" });
+    }
 
-    console.log(`Fetching all valid data for model ${modelId} from Convex...`);
-    const allData = await fetchAllValidData(modelId);
+    console.log(`Fetching all valid data for model ${modelId} and sector ${formattedSector} from Convex...`);
+    const allData = await fetchAllValidData(modelId, formattedSector);
 
     if (allData.length < 2) {
       return res.status(400).json({
-        error: `Insufficient data for training ${modelId}. At least 2 valid submissions are required, but found ${allData.length}.`,
+        error: `Insufficient data for training ${modelId} in ${sector} sector. At least 2 valid submissions are required, but found ${allData.length}.`,
       });
     }
 
@@ -80,7 +93,7 @@ const trainModel = async (req, res) => {
             await sendEmail(
               process.env.ADMIN_EMAIL,
               "Low Model Performance Warning",
-              `The Random Forest model trained for ${modelId} with an F1 score of ${metrics.f1Score}, which is below the threshold of 0.7.`
+              `The Random Forest model trained for ${modelId} in ${sector} sector with an F1 score of ${metrics.f1Score}, which is below the threshold of 0.7.`
             );
           } catch (emailError) {
             console.error("Failed to send admin notification:", emailError);
@@ -95,7 +108,6 @@ const trainModel = async (req, res) => {
 
         const txReceipt = await recordTransaction(modelId, user.walletAddress);
 
-        // console.log(modelId, user.walletAddress, txReceipt.transactionHash, user._id, user.walletAddress, duration, metrics.f1Score, errorMessage);
         const trainingRunId = await convex.mutation("trainingRuns:logTrainingRun", {
           modelId,
           triggeredByUserId: user._id,
@@ -107,7 +119,7 @@ const trainModel = async (req, res) => {
         });
 
         await convex.mutation("transactions:logTransaction", {
-          txHash: txReceipt.transactionHash, // Fixed from tx.transactionHash
+          txHash: txReceipt.transactionHash,
           type: "TRAINING",
           userId: user._id,
           walletAddress: user.walletAddress,
@@ -137,7 +149,7 @@ const trainModel = async (req, res) => {
         const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics);
 
         res.status(200).json({
-          message: `RandomForest model trained successfully for ${modelId}`,
+          message: `RandomForest model trained successfully for ${modelId} in ${sector} sector`,
           modelVersion: modelVersion.toString(),
           dataCount: allData.length,
           modelType: "RandomForest",
@@ -166,21 +178,15 @@ const trainModel = async (req, res) => {
       }
     }
   }
-};;
-/**
- * getInvalidSubmissions
- * Fetches all submissions with validationStatus "INVALID" along with user details.
- * Restricted to admin users.
- * @param {Object} req - Express request object.
- * @param {Object} res - Express response object.
- * @returns {Promise<void>} Responds with the list of invalid submissions or an error.
- */
+};
+
+// Rest of the file remains unchanged
 const getvalidUser = async (req, res) => {
   try {
-    const modelId = req.query.modelId; // Get modelId from query params
+    const modelId = req.query.modelId;
     console.log(`Fetching valid submissions ${modelId ? `for model ${modelId}` : "for all models"} from Convex...`);
     const allData = await convex.query("users:validSubmissions", modelId ? { modelId } : {});
-    
+
     if (allData.length === 0) {
       return res.status(200).json({ message: modelId ? `Nobody submitted valid data to ${modelId}` : "No valid submissions found" });
     }

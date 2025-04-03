@@ -30,15 +30,56 @@ export const submitDataToContract = async (name, organization, uniqueId, ipfsHas
       throw new Error("Invalid wallet address");
     }
 
+    // Log inputs for debugging
+    console.log("Submitting to contract with:", { name, organization, uniqueId, ipfsHash, walletAddress });
+
+    // Check balance (using BigInt)
+    const balance = await web3.eth.getBalance(walletAddress); // Returns string
+    console.log("Wallet balance (wei):", balance);
+    const minBalance = BigInt("10000000000000000"); // 0.01 ETH in wei
+    if (BigInt(balance) < minBalance) {
+      throw new Error("Insufficient funds in wallet (less than 0.01 ETH)");
+    }
+
+    // Get nonce to avoid mismatches
+    const nonce = await web3.eth.getTransactionCount(walletAddress, "pending");
+    console.log("Nonce:", nonce);
+
+    // Estimate gas
+    const gasEstimate = await contract.methods
+      .submitData(name, organization, uniqueId, ipfsHash)
+      .estimateGas({ from: walletAddress });
+    console.log("Estimated gas:", gasEstimate);
+
+    // Convert all to BigInt and calculate gas limit
+    const gasLimit = BigInt(gasEstimate) * BigInt(2) < BigInt(3000000) ? gasEstimate * BigInt(2) : BigInt(3000000);
+
     const tx = await contract.methods
       .submitData(name, organization, uniqueId, ipfsHash)
       .send({
-        from: walletAddress, // Use the user's wallet address
-        gas: 3000000,
+        from: walletAddress,
+        gas: Number(gasLimit), // Convert back to number for Web3.js compatibility
+        nonce: Number(nonce),  // Convert BigInt to number for send
       });
 
+    console.log("Transaction successful:", tx);
     return tx;
   } catch (error) {
+    console.error("Submission error:", error);
+    if (error.receipt) {
+      // Attempt to get revert reason
+      const tx = await web3.eth.getTransaction(error.transactionHash);
+      try {
+        await web3.eth.call({
+          from: walletAddress,
+          to: process.env.CONTRACT_ADDRESS,
+          data: contract.methods.submitData(name, organization, uniqueId, ipfsHash).encodeABI(),
+        });
+      } catch (callError) {
+        const revertReason = callError.reason || callError.message || "Unknown revert reason";
+        throw new Error(`Blockchain submission failed: Reverted with reason - ${revertReason}`);
+      }
+    }
     throw new Error(`Blockchain submission failed: ${error.message}`);
   }
 };
@@ -46,20 +87,30 @@ export const submitDataToContract = async (name, organization, uniqueId, ipfsHas
 // Penalize a user using their wallet address
 export const penalizeUser = async (uniqueId, walletAddress) => {
   try {
-    if (!web3.utils.isAddress(walletAddress)) {
-      throw new Error("Invalid wallet address");
-    }
-
     const tx = await contract.methods
       .penalizeUser(uniqueId)
-      .send({
-        from: walletAddress, 
-        gas: 3000000,
-      });
+      .send({ from: walletAddress });
 
-    return tx;
+    // Parse the transaction receipt for events
+    const receipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
+    const userPenalizedEvent = receipt.logs
+      .map((log) => {
+        try {
+          return contract.interface.parseLog(log);
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter((event) => event && event.name === "UserPenalized")[0];
+
+    const reputationLoss = userPenalizedEvent ? userPenalizedEvent.args.reputationLoss.toString() : "1";
+
+    return {
+      transactionHash: tx.transactionHash,
+      reputationLoss,
+    };
   } catch (error) {
-    throw new Error(`Penalization failed: ${error.message}`);
+    throw new Error(`Failed to penalize user: ${error.message}`);
   }
 };
 

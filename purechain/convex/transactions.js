@@ -1,5 +1,6 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+
 
 export const logTransaction = mutation({
   args: {
@@ -19,4 +20,11 @@ export const logTransaction = mutation({
   handler: async (ctx, args) => {
     return await ctx.db.insert("transactions", args);
   },
+});
+
+export const getAllTransactions = query({
+    args: {},
+    handler: async (ctx) => {
+        return await ctx.db.query("transactions").collect();
+    },
 });

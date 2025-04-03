@@ -16,7 +16,7 @@ export default defineSchema({
 
     submissions: defineTable({
         userId: v.id("users"),
-        dataHash: v.string(),
+        dataHash: v.optional(v.string()),
         validationStatus: v.union(v.literal("VALID"), v.literal("INVALID")),
         validationIssues: v.optional(v.array(v.string())),
         datasetName: v.string(),

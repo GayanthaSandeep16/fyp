@@ -117,58 +117,30 @@ export const fetchUserDetails = async (req, res) => {
 const convex = new ConvexHttpClient(process.env.CONVEX_URL_2);
 
 /**
- * getSubmissions
+ * getTransactions
  * Fetches all submissions from Convex and their corresponding transaction details.
  * Requires authentication.
  * @param {Object} req - Express request object.
  * @param {Object} res - Express response object.
  * @returns {Promise<void>} Responds with all submissions and their transaction details.
  */
-export const getSubmissions = async (req, res) => {
+export const getTransactions = async (req, res) => {
   try {
-    // Step 1: Fetch all submissions from Convex
-    const submissions = await convex.query("submissions:getSubmissions");
-    console.log("Fetched submissions:", submissions);
+    // Fetch all transactions from Convex
+    const transactions = await convex.query("transactions:getAllTransactions");
+    console.log("Fetched Transactions:", transactions);
 
-    if (!submissions || submissions.length === 0) {
-      return successResponse(res, { submissions: [], transactions: [] });
+    if (!transactions || transactions.length === 0) {
+      return successResponse(res, { transactions: [] });
     }
 
-    // Step 2: Fetch transaction details for each submission
-    const transactionPromises = submissions.map(async (submission) => {
-      if (!submission.transactionHash) {
-        return null; // Skip submissions without a transaction hash
-      }
-      try {
-        const details = await getTransactionDetails(submission.transactionHash);
-        return {
-          message: `Transaction successful in block #${details.blockNumber}`,
-          transactionHash: details.transactionHash,
-          from: details.from,
-          status: details.status,
-          events: details.events,
-          gasUsed: details.gasUsed,
-        };
-      } catch (error) {
-        console.error(
-          `Error fetching transaction ${submission.transactionHash}:`,
-          error
-        );
-        return null; // Skip failed transactions
-      }
-    });
-
-    const transactions = await Promise.all(transactionPromises);
-    const validTransactions = transactions.filter((tx) => tx !== null);
-
-    // Step 3: Return the combined data
+    // Return the transactions directly
     successResponse(res, {
-      submissions,
-      transactions: validTransactions,
+      transactions,
     });
   } catch (error) {
-    console.error("Error fetching submissions:", error);
-    errorResponse(res, `Failed to fetch submissions: ${error.message}`, 500);
+    console.error("Error fetching transactions:", error);
+    errorResponse(res, `Failed to fetch transactions: ${error.message}`, 500);
   }
 };
 

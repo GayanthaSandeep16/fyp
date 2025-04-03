@@ -5,7 +5,7 @@ export const successResponse = (res, data, status = 200) => {
     });
 };
 
-export const errorResponse = (res, message, status = 400) => {
+export const errorResponse = (res, message, status = 403) => {
     res.status(status).json({
         success: false,
         error: message
