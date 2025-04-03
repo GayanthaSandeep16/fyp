@@ -63,7 +63,7 @@ export default defineSchema({
         status: v.union(v.literal("SUCCESS"), v.literal("FAILED")),
         blockNumber: v.string(),
         eventName: v.string(),
-        eventArgs: v.any(), // Flexible object for event-specific data
+        eventArgs: v.any(), 
         created_at: v.number(),
     }).index("by_userId", ["userId"])
         .index("by_type", ["type"])
@@ -74,17 +74,7 @@ export default defineSchema({
         triggeredByUserId: v.id("users"),
         triggeredByWalletAddress: v.string(),
         duration: v.number(),
-        dataCount: v.number(),
-        metrics: v.object({
-            accuracy: v.optional(v.string()),
-            f1Score: v.optional(v.string()),
-            precision: v.optional(v.string()),
-            recall: v.optional(v.string()),
-        }),
         status: v.union(v.literal("SUCCESS"), v.literal("FAILED"), v.literal("LOW_PERFORMANCE")),
-        errorMessage: v.optional(v.string()),
-        modelFilePath: v.optional(v.string()),
-        scalerFilePath: v.optional(v.string()),
         trainingTxHash: v.optional(v.string()),
         created_at: v.number(),
     }).index("by_modelId", ["modelId"])

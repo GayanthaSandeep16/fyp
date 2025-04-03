@@ -25,7 +25,7 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
  */
 const trainModel = async (req, res) => {
   let tempFilePath;
-  const user = req.user; 
+  const user = req.user;
 
   try {
     const { modelId } = req.body;
@@ -36,10 +36,9 @@ const trainModel = async (req, res) => {
     console.log(`Fetching all valid data for model ${modelId} from Convex...`);
     const allData = await fetchAllValidData(modelId);
 
-    // Check if there’s enough valid data to train on (minimum 2 samples for train-test split)
-    if (allData.length < 2 ) {
-      return res.status(400).json({ 
-        error: `Insufficient data for training ${modelId}. At least 2 valid submissions are required, but found ${allData.length}.`
+    if (allData.length < 2) {
+      return res.status(400).json({
+        error: `Insufficient data for training ${modelId}. At least 2 valid submissions are required, but found ${allData.length}.`,
       });
     }
 
@@ -67,7 +66,8 @@ const trainModel = async (req, res) => {
 
     await new Promise((resolve, reject) => {
       pythonProcess.on("close", async (code) => {
-        const duration = (Date.now() - startTime) / 1000;
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
         console.log(`Training completed in ${duration} seconds`);
 
         if (code !== 0) {
@@ -93,37 +93,31 @@ const trainModel = async (req, res) => {
         await fs.rename(path.join(__dirname, "../../rf_model.pkl"), modelFilePath);
         await fs.rename(path.join(__dirname, "../../scaler.pkl"), scalerFilePath);
 
-
         const txReceipt = await recordTransaction(modelId, user.walletAddress);
-       
+
+        // console.log(modelId, user.walletAddress, txReceipt.transactionHash, user._id, user.walletAddress, duration, metrics.f1Score, errorMessage);
         const trainingRunId = await convex.mutation("trainingRuns:logTrainingRun", {
           modelId,
           triggeredByUserId: user._id,
           triggeredByWalletAddress: user.walletAddress,
           duration,
-          dataCount: allData.length,
-          metrics,
           status: metrics.f1Score && metrics.f1Score < 0.7 ? "LOW_PERFORMANCE" : "SUCCESS",
-          errorMessage: null,
-          modelFilePath,
-          scalerFilePath,
           trainingTxHash: txReceipt.transactionHash,
+          created_at: Date.now(),
         });
 
         await convex.mutation("transactions:logTransaction", {
-          txHash: tx.transactionHash,
+          txHash: txReceipt.transactionHash, // Fixed from tx.transactionHash
           type: "TRAINING",
           userId: user._id,
           walletAddress: user.walletAddress,
           uniqueId: `${modelId}_${modelVersion}`,
-          ipfsHash: null, // No IPFS upload
-          submissionId: null,
           status: txReceipt.status ? "SUCCESS" : "FAILED",
           blockNumber: txReceipt.blockNumber.toString(),
           eventName: "ModelTrained",
           eventArgs: { modelId },
+          created_at: Date.now(),
         });
-
 
         const savedModelId = await convex.mutation("model:saveModelDetails", {
           dataCount: allData.length,
@@ -135,7 +129,7 @@ const trainModel = async (req, res) => {
           status: "success",
           modelFilePath,
           scalerFilePath,
-          created_at: Date.now()
+          created_at: Date.now(),
         });
 
         const validUsers = await convex.query("users:validSubmissions", { modelId });
@@ -172,7 +166,7 @@ const trainModel = async (req, res) => {
       }
     }
   }
-};
+};;
 /**
  * getInvalidSubmissions
  * Fetches all submissions with validationStatus "INVALID" along with user details.

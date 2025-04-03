@@ -9,7 +9,7 @@ export const logTransaction = mutation({
     walletAddress: v.string(),
     uniqueId: v.string(),
     ipfsHash: v.optional(v.string()),
-    submissionId: v.optional(v.id("submissions")),
+    submissionId: v.optional(v.string()),
     status: v.union(v.literal("SUCCESS"), v.literal("FAILED")),
     blockNumber: v.string(),
     eventName: v.string(),
