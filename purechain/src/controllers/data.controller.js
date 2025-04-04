@@ -1,6 +1,6 @@
 import { generateUniqueId, saveFileToTemp, validateData } from "../services/file.service.js";
 import { uploadFileToPinata } from "../../pinata/fileUpload.js";
-import { penalizeUser, submitDataToContract, getReputationService } from "../services/blockchain.service.js";
+import { penalizeUser, submitDataToContract, getReputationService ,getUserDetails } from "../services/blockchain.service.js";
 import { successResponse, errorResponse } from "../utils/responseHandler.js";
 import { getModelDetails } from "../services/model.service.js";
 import { ConvexHttpClient } from "convex/browser";
@@ -65,6 +65,10 @@ const submitData = async (req, res) => {
     const uniqueId = generateUniqueId(user.name, user.organization, user._id);
     filePath = await saveFileToTemp(file);
 
+    // Check if the user is a first-time submitter
+    const userDetails = await getUserDetails(walletAddress);
+    const isFirstSubmission = userDetails.submissionCount === 0;
+
     // Validate data first
     const validateStartTime = Date.now();
     console.log("Validation start time at:", new Date(validateStartTime).toISOString());
@@ -72,64 +76,74 @@ const submitData = async (req, res) => {
     const validationEndTime = Date.now();
     console.log("Validation completed at:", new Date(validationEndTime).toISOString());
 
-    let ipfsHash = ""; // Default to empty string
-    let tx;
+    console.log("Validation result:", validation.quality, validation.issues);
 
-    // Handle valid data: upload to IPFS and submit to blockchain
-    if (validation.quality === "VALID") {
-      ipfsHash = await uploadFileToPinata(filePath, {
-        name: `${user.name}_${Date.now()}`,
-        keyvalues: { userId: walletAddress, organization: user.organization, uniqueId },
-      });
-      tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
-    } else {
-      // For invalid data, skip IPFS upload and submit with empty ipfsHash
-      tx = await submitDataToContract(user.name, user.organization, uniqueId, "", walletAddress);
-    }
+    let ipfsHash = "";
+    let submissionTxHash = null;
+    let penalizeResult = null;
 
-    const txReceipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
-    if (!txReceipt || !txReceipt.status) {
-      throw new Error("Blockchain transaction failed");
-    }
-
-    // Save submission to Convex
+    // Save submission to Convex (even for invalid data)
     const submissionId = await convex.mutation(api.submissions.submitData, {
       userId: user._id,
-      dataHash: ipfsHash, // Use the actual ipfsHash (empty for invalid)
+      dataHash: ipfsHash,
       validationStatus: validation.quality,
       validationIssues: validation.quality === "INVALID" ? validation.issues : undefined,
       datasetName: file.name,
-      transactionHash: tx.transactionHash,
+      transactionHash: "",
       walletAddress: walletAddress,
       sector: user.sector,
       modelId,
     });
 
-    // Log submission transaction
-    await convex.mutation("transactions:logTransaction", {
-      txHash: tx.transactionHash,
-      type: "SUBMISSION",
-      userId: user._id,
-      walletAddress,
-      uniqueId,
-      ipfsHash: ipfsHash || null, // Use null if empty
-      submissionId,
-      status: txReceipt.status ? "SUCCESS" : "FAILED",
-      blockNumber: txReceipt.blockNumber.toString(),
-      eventName: "DataSubmitted",
-      eventArgs: { uniqueId, ipfsHash: ipfsHash || "" },
-      created_at: Date.now(),
-    });
+    // Handle valid data or first-time invalid submission
+    if (validation.quality === "VALID" || (validation.quality === "INVALID" && isFirstSubmission)) {
+      if (validation.quality === "VALID") {
+        ipfsHash = await uploadFileToPinata(filePath, {
+          name: `${user.name}_${Date.now()}`,
+          keyvalues: { userId: walletAddress, organization: user.organization, uniqueId },
+        });
+      } else {
+        // For first-time invalid submission, use a dummy IPFS hash
+        ipfsHash = "INVALID_FIRST_SUBMISSION";
+      }
 
-    // Log reward transaction (only for valid data)
-    if (validation.quality === "VALID") {
+      const tx = await submitDataToContract(user.name, user.organization, uniqueId, ipfsHash, walletAddress);
+      const txReceipt = await web3.eth.getTransactionReceipt(tx.transactionHash);
+      if (!txReceipt || !txReceipt.status) {
+        throw new Error("Blockchain transaction failed");
+      }
+      submissionTxHash = tx.transactionHash;
+
+      // Update submission with transaction hash
+      await convex.mutation(api.submissions.update, {
+        id: submissionId,
+        transactionHash: submissionTxHash,
+      });
+
+      // Log submission transaction
       await convex.mutation("transactions:logTransaction", {
-        txHash: tx.transactionHash,
+        txHash: submissionTxHash,
+        type: "SUBMISSION",
+        userId: user._id,
+        walletAddress,
+        uniqueId,
+        ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? null : ipfsHash,
+        submissionId,
+        status: txReceipt.status ? "SUCCESS" : "FAILED",
+        blockNumber: txReceipt.blockNumber.toString(),
+        eventName: "DataSubmitted",
+        eventArgs: { uniqueId, ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? "" : ipfsHash },
+        created_at: Date.now(),
+      });
+
+      // Log reward transaction
+      await convex.mutation("transactions:logTransaction", {
+        txHash: submissionTxHash,
         type: "REWARD",
         userId: user._id,
         walletAddress,
         uniqueId,
-        ipfsHash,
+        ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? null : ipfsHash,
         submissionId,
         status: txReceipt.status ? "SUCCESS" : "FAILED",
         blockNumber: txReceipt.blockNumber.toString(),
@@ -139,13 +153,11 @@ const submitData = async (req, res) => {
       });
     }
 
-    // Handle penalization for invalid data
-    let penalizeResult;
-    let  userDetails;
-    if (validation.quality === "INVALID") {
+    // Handle penalization for invalid data (only for non-first-time submissions)
+    if (validation.quality === "INVALID" && !isFirstSubmission) {
       penalizeResult = await penalizeUser(uniqueId, walletAddress);
       const penalizeReceipt = await web3.eth.getTransactionReceipt(penalizeResult.transactionHash);
-    
+
       // Log penalization transaction with reputation loss from the event
       await convex.mutation("transactions:logTransaction", {
         txHash: penalizeResult.transactionHash,
@@ -158,13 +170,13 @@ const submitData = async (req, res) => {
         status: penalizeReceipt.status ? "SUCCESS" : "FAILED",
         blockNumber: penalizeReceipt.blockNumber.toString(),
         eventName: "UserPenalized",
-        eventArgs: { uniqueId, reputationLoss: penalizeResult.reputationLoss }, // Use the value from the event
+        eventArgs: { uniqueId, reputationLoss: penalizeResult.reputationLoss },
         created_at: Date.now(),
       });
-    
+
       // Check if blacklisted and log if applicable
-      userDetails = await getReputationService(walletAddress);
-      if (userDetails.reputation < 0) {
+      const updatedUserDetails = await getUserDetails(walletAddress);
+      if (updatedUserDetails.reputation < 0) {
         await convex.mutation("transactions:logTransaction", {
           txHash: penalizeResult.transactionHash,
           type: "BLACKLIST",
@@ -179,6 +191,9 @@ const submitData = async (req, res) => {
           eventArgs: { uniqueId },
           created_at: Date.now(),
         });
+
+        // Return error response if user is blacklisted
+        return errorResponse(res, "User is blocked by the system due to repeated invalid data submissions.", 403);
       }
     }
 
@@ -186,14 +201,9 @@ const submitData = async (req, res) => {
     const endTime = Date.now();
     console.log("submit end time at:", new Date(endTime).toISOString());
 
-    // if (userDetails.reputation < 0) {
-    //   return errorResponse(res, "User is blocked by the system due to repeated invalid data submissions.", 403);
-    // }
-
     successResponse(res, {
-      message: "Data submitted successfully",
-      ipfsHash: ipfsHash || undefined, // Only include if valid
-      submissionTxHash: tx.transactionHash,
+      message: "Data processed successfully",
+      submissionTxHash,
       penalizeTxHash: penalizeResult?.transactionHash,
       walletAddress,
       reputation: updatedReputation.reputation.toString(),

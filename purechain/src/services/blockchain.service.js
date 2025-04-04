@@ -142,18 +142,14 @@ export const isUserBlacklisted = async (walletAddress) => {
 //Get full user details using wallet address
 export const getUserDetails = async (walletAddress) => {
   try {
-    if (!web3.utils.isAddress(walletAddress)) {
-      throw new Error("Invalid wallet address");
-    }
-
-    const userData = await contract.methods.getUserByAddress(walletAddress).call();
+    const userDetails = await contract.methods.getUserByAddress(walletAddress).call();
     return {
-      name: userData[0],
-      organization: userData[1],
-      uniqueId: userData[2],
-      reputation: userData[3],
-      isBlacklisted: userData[4],
-      submissionCount: userData[5],
+      name: userDetails[0],
+      organization: userDetails[1],
+      uniqueId: userDetails[2],
+      reputation: parseInt(userDetails[3]),
+      isBlacklisted: userDetails[4],
+      submissionCount: parseInt(userDetails[5]),
     };
   } catch (error) {
     throw new Error(`Failed to fetch user details: ${error.message}`);
