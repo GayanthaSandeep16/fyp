@@ -1,5 +1,6 @@
-import { fetchAllValidData, sendNotifications, dataToCsvString } from "../services/admin.service.js";
+import { fetchAllValidData, sendNotifications, dataToCsvString, dataToCsvStringForKMeans } from "../services/admin.service.js";
 import { recordTransaction } from "../services/blockchain.service.js";
+import { prepareKMeansData } from "../utils/kmeansUtils.js";
 import { ConvexHttpClient } from "convex/browser";
 import { spawn } from "child_process";
 import fs from "fs/promises";
@@ -26,8 +27,12 @@ const convex = new ConvexHttpClient(process.env["CONVEX_URL_2"]);
 const trainModel = async (req, res) => {
   let tempFilePath;
   const user = req.user;
-  const sector = req.body.sector
-  const modelId = req.body.modelId
+  const sector = req.body.sector;
+  const modelId = req.body.modelId;
+
+  // Correctly determine modelChoice based on modelId
+  const modelChoice = modelId === "model1" ? "RandomForest" : "KMeans";
+  console.log(`Model id: ${modelId}, Model choice: ${modelChoice}`);
 
   let formattedSector = sector;
   if (sector === "healthcare") {
@@ -35,42 +40,67 @@ const trainModel = async (req, res) => {
   } else if (sector === "finance") {
     formattedSector = "Finance";
   }
-  console.log(formattedSector)
+  
 
   try {
-
     if (!modelId) {
       return res.status(400).json({ error: "Model ID is required" });
     }
     if (!sector || !["healthcare", "finance"].includes(sector)) {
       return res.status(400).json({ error: "Sector is required and must be 'healthcare' or 'finance'" });
     }
+    if (!["model1", "model2"].includes(modelId)) {
+      return res.status(400).json({ error: "Model ID must be 'model1' or 'model2'" });
+    }
 
-    console.log(`Fetching all valid data for model ${modelId} and sector ${formattedSector} from Convex...`);
-    const allData = await fetchAllValidData(modelId, formattedSector);
+    const modelType = modelChoice;
+    console.log(`Model type: ${modelType}`);
+
+    console.log(`Fetching all valid data for model ${modelId}, sector ${formattedSector}, modelChoice ${modelChoice} from Convex...`);
+    let allData = await fetchAllValidData(modelId, formattedSector);
 
     if (allData.length < 2) {
       return res.status(400).json({
-        error: `Insufficient data for training ${modelId} in ${sector} sector. At least 2 valid submissions are required, but found ${allData.length}.`,
+        error: `Insufficient data for training ${modelId} in ${sector} sector with ${modelChoice}. At least 2 valid submissions are required, but found ${allData.length}.`,
       });
     }
+    if (modelChoice === "KMeans") {
+      console.log("Entering K-Means preparation path...");
+      allData = prepareKMeansData(allData);
+      const csvString = await dataToCsvStringForKMeans(allData);
+      tempFilePath = path.join(__dirname, "../../temp_data.csv");
+      await fs.writeFile(tempFilePath, csvString);
+      console.log(`Data saved to ${tempFilePath}`);
+    } else {
+      console.log("Using RandomForest path, keeping target column...");
+      const csvString = await dataToCsvString(allData);
+      tempFilePath = path.join(__dirname, "../../temp_data.csv");
+      await fs.writeFile(tempFilePath, csvString);
+      console.log(`Data saved to ${tempFilePath}`);
+      console.log("CSV content sample:", csvString.slice(0, 500));
+    }
 
-    const csvString = await dataToCsvString(allData);
-    tempFilePath = path.join(__dirname, "../../temp_data.csv");
-    await fs.writeFile(tempFilePath, csvString);
-    console.log(`Data saved to ${tempFilePath}`);
 
     const startTime = Date.now();
-    const pythonProcess = spawn("python3", ["./ml/mltrain.py", tempFilePath]);
-    const metrics = { accuracy: null, f1Score: null, precision: null, recall: null };
+    const pythonScript = modelChoice === "KMeans" ? "./ml/kmeans_train.py" : "./ml/mltrain.py";
+    console.log(`Running Python script: ${pythonScript}`);
+    const pythonProcess = spawn("python3", [pythonScript, tempFilePath]);
+    const metrics = {};
+    console.log("metrics object initialized:", metrics);
 
     pythonProcess.stdout.on("data", (data) => {
       const str = data.toString();
       console.log(`Python: ${str}`);
-      if (str.match(/Accuracy: ([\d.]+)/)) metrics.accuracy = parseFloat(str.match(/Accuracy: ([\d.]+)/)[1]);
-      if (str.match(/F1 Score: ([\d.]+)/)) metrics.f1Score = parseFloat(str.match(/F1 Score: ([\d.]+)/)[1]);
-      if (str.match(/Precision: ([\d.]+)/)) metrics.precision = parseFloat(str.match(/Precision: ([\d.]+)/)[1]);
-      if (str.match(/Recall: ([\d.]+)/)) metrics.recall = parseFloat(str.match(/Recall: ([\d.]+)/)[1]);
+      if (modelChoice === "RandomForest") {
+        if (str.match(/Accuracy: ([\d.]+)/)) metrics.accuracy = parseFloat(str.match(/Accuracy: ([\d.]+)/)[1]);
+        if (str.match(/F1 Score: ([\d.]+)/)) metrics.f1Score = parseFloat(str.match(/F1 Score: ([\d.]+)/)[1]);
+        if (str.match(/Precision: ([\d.]+)/)) metrics.precision = parseFloat(str.match(/Precision: ([\d.]+)/)[1]);
+        if (str.match(/Recall: ([\d.]+)/)) metrics.recall = parseFloat(str.match(/Recall: ([\d.]+)/)[1]);
+      } else {
+        if (str.match(/Silhouette Score: ([\d.]+)/)) {
+          metrics.silhouetteScore = parseFloat(str.match(/Silhouette Score: ([\d.]+)/)[1]);
+        }
+      }
     });
 
     pythonProcess.stderr.on("data", (data) => {
@@ -87,23 +117,20 @@ const trainModel = async (req, res) => {
           return reject(new Error(`Python script failed with code ${code}`));
         }
 
-        if (metrics.f1Score && metrics.f1Score < 0.7) {
+        if (modelChoice === "RandomForest" && metrics.f1Score && metrics.f1Score < 0.7) {
           console.warn("Low F1 score detected. Model quality may be poor.");
-          try {
-            await sendEmail(
-              process.env.ADMIN_EMAIL,
-              "Low Model Performance Warning",
-              `The Random Forest model trained for ${modelId} in ${sector} sector with an F1 score of ${metrics.f1Score}, which is below the threshold of 0.7.`
-            );
-          } catch (emailError) {
-            console.error("Failed to send admin notification:", emailError);
-          }
+          await sendEmail(
+            process.env.ADMIN_EMAIL,
+            "Low Model Performance Warning",
+            `The Random Forest model trained for ${modelId} in ${sector} sector with an F1 score of ${metrics.f1Score}, which is below the threshold of 0.7.`
+          ).catch((emailError) => console.error("Failed to send admin notification:", emailError));
         }
 
         const modelVersion = Date.now();
-        const modelFilePath = path.join(__dirname, `../../rf_model_${modelVersion}.pkl`);
+        const modelFileName = `${modelType.toLowerCase()}_model_${modelVersion}.pkl`;
+        const modelFilePath = path.join(__dirname, `../../${modelFileName}`);
         const scalerFilePath = path.join(__dirname, `../../scaler_${modelVersion}.pkl`);
-        await fs.rename(path.join(__dirname, "../../rf_model.pkl"), modelFilePath);
+        await fs.rename(path.join(__dirname, "../../model.pkl"), modelFilePath);
         await fs.rename(path.join(__dirname, "../../scaler.pkl"), scalerFilePath);
 
         const txReceipt = await recordTransaction(modelId, user.walletAddress);
@@ -113,7 +140,7 @@ const trainModel = async (req, res) => {
           triggeredByUserId: user._id,
           triggeredByWalletAddress: user.walletAddress,
           duration,
-          status: metrics.f1Score && metrics.f1Score < 0.7 ? "LOW_PERFORMANCE" : "SUCCESS",
+          status: modelChoice === "RandomForest" && metrics.f1Score && metrics.f1Score < 0.7 ? "LOW_PERFORMANCE" : "SUCCESS",
           trainingTxHash: txReceipt.transactionHash,
           created_at: Date.now(),
         });
@@ -133,30 +160,31 @@ const trainModel = async (req, res) => {
 
         const savedModelId = await convex.mutation("model:saveModelDetails", {
           dataCount: allData.length,
-          modelType: "RandomForest",
-          accuracy: metrics.accuracy !== null ? metrics.accuracy.toString() : "N/A",
-          f1Score: metrics.f1Score !== null ? metrics.f1Score.toString() : "N/A",
-          precision: metrics.precision !== null ? metrics.precision.toString() : "N/A",
-          recall: metrics.recall !== null ? metrics.recall.toString() : "N/A",
+          modelType,
+          metrics,
           status: "success",
           modelFilePath,
           scalerFilePath,
           created_at: Date.now(),
         });
 
-        const validUsers = await convex.query("users:validSubmissions", { modelId });
-        const invalidUsers = await convex.query("users:InValidSubmissions", { modelId });
-        const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics);
+        console.log(`Fetching valid and invalid users for notifications (modelId: ${modelId})...`);
+        const validUsers = await convex.query("users:validSubmissions", { modelId, sector: formattedSector });
+        const invalidUsers = await convex.query("users:InValidSubmissions", { modelId, sector: formattedSector });
+        console.log(`Valid users: ${validUsers.length}, Invalid users: ${invalidUsers.length}`);
+        console.log("Valid users sample:", validUsers.slice(0, 2));
+        console.log("Invalid users sample:", invalidUsers.slice(0, 2));
+
+        console.log("Sending notifications...");
+        const emailErrors = await sendNotifications(validUsers, invalidUsers, metrics, modelChoice);
+        console.log(`Notifications sent. Email errors: ${emailErrors.length > 0 ? emailErrors : "None"}`);
 
         res.status(200).json({
-          message: `RandomForest model trained successfully for ${modelId} in ${sector} sector`,
+          message: `${modelChoice} Trained successfully for ${modelId} in ${sector} sector`,
           modelVersion: modelVersion.toString(),
           dataCount: allData.length,
-          modelType: "RandomForest",
-          accuracy: metrics.accuracy || "N/A",
-          f1Score: metrics.f1Score || "N/A",
-          precision: metrics.precision || "N/A",
-          recall: metrics.recall || "N/A",
+          modelType,
+          metrics,
           modelFilePath,
           scalerFilePath,
           emailErrors: emailErrors.length > 0 ? emailErrors : undefined,
