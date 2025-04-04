@@ -29,6 +29,8 @@ async function fetchAllValidData(modelId,sector) {
       sector,
     });
 
+    console.log(validatedData)
+
     if (!validatedData || validatedData.length === 0) {
       console.log(`No valid data found for model ${modelId}`);
       return [];
@@ -46,7 +48,7 @@ async function fetchAllValidData(modelId,sector) {
 
     // First pass: Collect values for imputation
     for (const entry of validatedData) {
-      const ipfsHash = entry.dataHash || entry.ipfsHash;
+      const ipfsHash = entry;
       if (!ipfsHash) {
         console.error(`No IPFS hash found in entry:`, entry);
         continue;
@@ -131,7 +133,7 @@ async function fetchAllValidData(modelId,sector) {
 
     // Second pass: Standardize data and impute missing features
     for (const entry of validatedData) {
-      const ipfsHash = entry.dataHash || entry.ipfsHash;
+      const ipfsHash = entry;
       if (!ipfsHash) continue;
 
       let result;
