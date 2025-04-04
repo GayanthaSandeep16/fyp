@@ -10,10 +10,7 @@ export const saveModelDetails = mutation({
   args: {
     dataCount: v.number(),
     modelType: v.string(),
-    accuracy: v.string(),
-    f1Score: v.string(),
-    precision: v.string(),
-    recall: v.string(),
+    metrics: v.optional(v.record(v.string(), v.any())),
     status: v.string(),
     modelFilePath: v.string(),
     scalerFilePath: v.string(),

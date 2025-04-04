@@ -64,10 +64,12 @@ export const submitData = mutation({
     args: {
       id: v.id("submissions"),
       transactionHash: v.string(),
+      dataHash: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
       await ctx.db.patch(args.id, {
         transactionHash: args.transactionHash,
+        dataHash: args.dataHash,
       });
     },
   });

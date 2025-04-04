@@ -38,16 +38,20 @@ export const getUserByClerkId = query({
  */
 export const InValidSubmissions = query({
   args: {
-    modelId: v.optional(v.string()), // Optional modelId filter
+    modelId: v.optional(v.string()),
+    sector: v.optional(v.string()),
   },
-  handler: async (ctx, args) => { // Ensure args is passed here
+  handler: async (ctx, args) => {
     let query = ctx.db
       .query("submissions")
       .filter((q) => q.eq(q.field("validationStatus"), "INVALID"));
 
-    // Apply modelId filter if provided
     if (args.modelId) {
       query = query.filter((q) => q.eq(q.field("modelId"), args.modelId));
+    }
+
+    if (args.sector) {
+      query = query.filter((q) => q.eq(q.field("sector"), args.sector));
     }
 
     const invalidSubmissions = await query.collect();
@@ -74,16 +78,20 @@ export const InValidSubmissions = query({
  */
 export const validSubmissions = query({
   args: {
-    modelId: v.optional(v.string()), // Optional modelId filter
+    modelId: v.optional(v.string()),
+    sector: v.optional(v.string()),
   },
-  handler: async (ctx, args) => { // Ensure args is passed here
+  handler: async (ctx, args) => {
     let query = ctx.db
       .query("submissions")
       .filter((q) => q.eq(q.field("validationStatus"), "VALID"));
 
-    // Apply modelId filter if provided
     if (args.modelId) {
       query = query.filter((q) => q.eq(q.field("modelId"), args.modelId));
+    }
+
+    if (args.sector) {
+      query = query.filter((q) => q.eq(q.field("sector"), args.sector));
     }
 
     const validSubmissions = await query.collect();
