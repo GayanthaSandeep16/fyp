@@ -118,6 +118,7 @@ const submitData = async (req, res) => {
       await convex.mutation(api.submissions.update, {
         id: submissionId,
         transactionHash: submissionTxHash,
+        dataHash: ipfsHash,
       });
 
       // Log submission transaction
