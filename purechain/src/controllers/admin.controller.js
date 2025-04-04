@@ -180,7 +180,7 @@ const trainModel = async (req, res) => {
         console.log(`Notifications sent. Email errors: ${emailErrors.length > 0 ? emailErrors : "None"}`);
 
         res.status(200).json({
-          message: `${modelChoice} Trained successfully for ${modelId} in ${sector} sector`,
+          message: `${modelChoice} Trained successfully for ${modelId} in ${formattedSector} sector`,
           modelVersion: modelVersion.toString(),
           dataCount: allData.length,
           modelType,
