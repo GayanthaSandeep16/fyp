@@ -128,7 +128,7 @@ print("\nFeature importances:")
 print(feature_importances)
 
 # Save model and scaler
-with open("rf_model.pkl", "wb") as f:
+with open("model.pkl", "wb") as f:
     pickle.dump(best_rf, f)
 with open("scaler.pkl", "wb") as f:
     pickle.dump(scaler, f)
