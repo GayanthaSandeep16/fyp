@@ -14,7 +14,7 @@ def rule_based_validation(df):
         issues.append(f"High missing values: {missing_pct:.2f}%")
     
     duplicate_rows = df.duplicated().sum()
-    if duplicate_rows > 20:
+    if duplicate_rows > 100:
         issues.append(f"Duplicate rows: {duplicate_rows}")
     
     if 'age' in df.columns:
