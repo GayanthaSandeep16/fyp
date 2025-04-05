@@ -128,7 +128,7 @@ const submitData = async (req, res) => {
         userId: user._id,
         walletAddress,
         uniqueId,
-        ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? null : ipfsHash,
+        ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? "" : ipfsHash,
         submissionId,
         status: txReceipt.status ? "SUCCESS" : "FAILED",
         blockNumber: txReceipt.blockNumber.toString(),
@@ -144,7 +144,7 @@ const submitData = async (req, res) => {
         userId: user._id,
         walletAddress,
         uniqueId,
-        ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? null : ipfsHash,
+        ipfsHash: ipfsHash === "INVALID_FIRST_SUBMISSION" ? "" : ipfsHash,
         submissionId,
         status: txReceipt.status ? "SUCCESS" : "FAILED",
         blockNumber: txReceipt.blockNumber.toString(),
@@ -156,45 +156,68 @@ const submitData = async (req, res) => {
 
     // Handle penalization for invalid data (only for non-first-time submissions)
     if (validation.quality === "INVALID" && !isFirstSubmission) {
-      penalizeResult = await penalizeUser(uniqueId, walletAddress);
-      const penalizeReceipt = await web3.eth.getTransactionReceipt(penalizeResult.transactionHash);
-
-      // Log penalization transaction with reputation loss from the event
-      await convex.mutation("transactions:logTransaction", {
-        txHash: penalizeResult.transactionHash,
-        type: "PENALIZE",
-        userId: user._id,
-        walletAddress,
-        uniqueId,
-        ipfsHash: " ",
-        submissionId,
-        status: penalizeReceipt.status ? "SUCCESS" : "FAILED",
-        blockNumber: penalizeReceipt.blockNumber.toString(),
-        eventName: "UserPenalized",
-        eventArgs: { uniqueId, reputationLoss: penalizeResult.reputationLoss },
-        created_at: Date.now(),
-      });
-
-      // Check if blacklisted and log if applicable
-      const updatedUserDetails = await getUserDetails(walletAddress);
-      if (updatedUserDetails.reputation < 0) {
+      try {
+        penalizeResult = await penalizeUser(uniqueId, walletAddress);
+        const penalizeReceipt = await web3.eth.getTransactionReceipt(penalizeResult.transactionHash);
+    
+        // Log penalization transaction
         await convex.mutation("transactions:logTransaction", {
           txHash: penalizeResult.transactionHash,
-          type: "BLACKLIST",
+          type: "PENALIZE",
           userId: user._id,
           walletAddress,
           uniqueId,
-          ipfsHash: null,
+          ipfsHash: " ",
           submissionId,
           status: penalizeReceipt.status ? "SUCCESS" : "FAILED",
           blockNumber: penalizeReceipt.blockNumber.toString(),
-          eventName: "UserBlacklisted",
-          eventArgs: { uniqueId },
+          eventName: "UserPenalized",
+          eventArgs: { uniqueId, reputationLoss: penalizeResult.reputationLoss },
           created_at: Date.now(),
         });
-
-        // Return error response if user is blacklisted
-        return errorResponse(res, "User is blocked by the system due to repeated invalid data submissions.", 403);
+    
+        // Check if blacklisted
+        const updatedUserDetails = await getUserDetails(walletAddress);
+        if (updatedUserDetails.reputation < 0) {
+          await convex.mutation("transactions:logTransaction", {
+            txHash: penalizeResult.transactionHash,
+            type: "BLACKLIST",
+            userId: user._id,
+            walletAddress,
+            uniqueId,
+            ipfsHash: "",
+            submissionId,
+            status: penalizeReceipt.status ? "SUCCESS" : "FAILED",
+            blockNumber: penalizeReceipt.blockNumber.toString(),
+            eventName: "UserBlacklisted",
+            eventArgs: { uniqueId },
+            created_at: Date.now(),
+          });
+    
+          // Return blacklist-specific response
+          return errorResponse(
+            res,
+            "You have been blocked from submitting data due to repeated invalid submissions.",
+            403
+          );
+        }
+      } catch (error) {
+        // Log the full error for debugging
+        console.error("Full penalization error:", error);
+    
+        // Check if the error is due to the user being blacklisted
+        const errorString = error.message + (error.reason || "");
+        if (errorString.includes("User is blacklisted")) {
+          return errorResponse(
+            res,
+            "You have been blocked from submitting data due to repeated invalid submissions.",
+            403
+          );
+        }
+    
+        // Generic error for other cases
+        console.error("Penalization error:", error);
+        return errorResponse(res, "You have been blocked from submitting data due to repeated invalid submissions.", 400);
       }
     }
 
