@@ -62,7 +62,7 @@ router.get('/notifications', requireAuth, isAdmin, adminController.getNotificati
  * Retrieves the reputation score of a user or agent from the blockchain.
  * Requires authentication.
  */
-router.get('/reputation', getReputation);
+router.post('/reputation', requireAuth ,getReputation);
 
 /**
  * GET /check-transaction
