@@ -1,5 +1,5 @@
 import express from 'express';
-import { submitData  } from './controllers/data.controller.js';
+import { submitData } from './controllers/data.controller.js';
 import { getWeb3Status, getReputation, getTransactions } from './controllers/web3.controller.js';
 import memberController from './controllers/member.controller.js';
 import adminController from './controllers/admin.controller.js';
@@ -66,6 +66,14 @@ router.post('/allSubmisson', requireAuth, getTransactions);
 
 
 /**
+ * GET /model
+ * Retrieves details of the trained model from Convex.
+ * Restricted to admin users.
+ */
+router.get('/allmodels', requireAuth, isAdmin, adminController.getallModels);
+
+
+/**
  * GET /test
  * A test endpoint to verify the server is running.
  * No authentication required.
@@ -74,7 +82,5 @@ router.get('/test', (req, res) => {
   res.status(200).send("Hello FYP");
 });
 
-// Uncomment and use this endpoint if needed for Web3 status checks
-// router.get('/web3-status', requireAuth, getWeb3Status);
 
 export default router;

@@ -275,4 +275,20 @@ const getNotifications = async (req, res) => {
   }
 };
 
-export default { trainModel, getInvalidUser, getvalidUser, getNotifications };
+async function getallModels(req, res) {
+  try {
+    console.log("Fetching all models from Convex...");
+    const allModels = await convex.query("model:getAllModels");
+
+    if (!allModels || allModels.length === 0) {
+      return res.status(404).json({ error: "No models found" });
+    }
+
+    res.status(200).json(allModels);
+  } catch (error) {
+    console.error("Error in /models endpoint:", error);
+    res.status(500).json({ error: "Failed to fetch models", details: error.message });
+  }
+}
+
+export default { trainModel, getInvalidUser, getvalidUser, getNotifications, getallModels };

@@ -14,19 +14,22 @@ export const saveModelDetails = mutation({
     status: v.string(),
     modelFilePath: v.string(),
     scalerFilePath: v.string(),
-    created_at: v.number(), // Add to validator
+    created_at: v.number(), 
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("models", {
-      ...args, // Now includes created_at from the args
+      ...args, 
     });
   },
 });
 
-export const getModelDetails = query({
+//getModelDetails
+/**
+ * Retrieves the details of a specific model from Convex.
+ */
+export const getAllModels = query({
   handler: async (ctx) => {
-    const models = await ctx.db.query("models").order("desc").collect();
-    return models;
+    return await ctx.db.query("models").collect();
   },
 });
 
