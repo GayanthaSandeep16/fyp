@@ -6,7 +6,7 @@ import json
 import joblib
 import os
 
-# Step 1: Rule-Based Validation (No changes needed)
+# Step 1: Rule-Based Validation 
 def rule_based_validation(df):
     issues = []
     missing_pct = df.isnull().mean().max() * 100
@@ -24,7 +24,7 @@ def rule_based_validation(df):
     
     return issues, missing_pct, duplicate_rows
 
-# Step 2: Statistical Metrics (Added null checks)
+# Step 2: Statistical Metrics 
 def calculate_statistics(df):
     stats = {}
     
