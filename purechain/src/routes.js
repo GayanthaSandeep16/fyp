@@ -23,6 +23,13 @@ router.post('/submit-data', requireAuth, submitData);
 router.post('/create-user', memberController.createUser);
 
 /**
+  * POST /create-admin
+  * Creates a new admin user in the system.
+  * 
+  */
+router.post('/create-admin', requireAuth, isAdmin, memberController.createAdmin);
+
+/**
  * POST /train
  * Triggers the training of the ML model using validated data.
  * Restricted to admin users.

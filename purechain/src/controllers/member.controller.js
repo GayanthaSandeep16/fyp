@@ -28,6 +28,7 @@ import { api } from "../../convex/_generated/api.js";
 async function createUser(req, res) {
   const { name, email, organization, sector, role, clerkUserId, walletAddress } = req.body;
 
+  console.log("Received request to create user:", req.body);
   // Validate required fields
   if (!name || !email || !organization || !sector || !role || !clerkUserId || !walletAddress) {
     return res.status(400).json({ error: "All fields are required." });
@@ -70,5 +71,56 @@ async function createUser(req, res) {
   }
 }
 
+async function createAdmin(req, res) {
+  const { name, email, walletAddress, password } = req.body; 
+  console.log("Received request to create admin:", req.body);
+
+  // Validate required fields
+  if (!name || !email || !walletAddress || !password) {
+    return res.status(400).json({ error: "All fields (name, email, walletAddress, password) are required." });
+  }
+
+  // Additional validation for email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Invalid email format." });
+  }
+
+  try {
+    // Create a new Clerk user
+    const clerkUser = await clerkClient.users.createUser({
+      firstName: name.split(" ")[0],
+      lastName: name.split(" ").slice(1).join(" ") || "", 
+      emailAddress: [email], 
+      password, 
+      unsafeMetadata: {
+        walletAddress, 
+      },
+      publicMetadata: {
+        role: "Admin" 
+      }
+    });
+
+    const clerkUserId = clerkUser.id;
+
+    // Call the Convex mutation to create the user (assuming client is defined elsewhere)
+    const userId = await client.mutation("users:createUser", {
+      name,
+      email,
+      organization: "PureChain",
+      sector: "Healthcare",
+      role: "Admin",
+      walletAddress,
+      clerkUserId,
+    });
+
+    // Respond with success message
+    res.status(200).json({ message: "Admin created successfully!", clerkUserId });
+  } catch (error) {
+    console.error("Error creating admin:", error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // Export the controller functions
-export default { createUser };
+export default { createUser, createAdmin };
