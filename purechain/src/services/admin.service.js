@@ -290,7 +290,7 @@ async function dataToCsvString(data) {
   );
 
   const csvContent = [headers.join(","), ...rows].join("\n");
-  console.log("CSV content preview:", csvContent.slice(0, 500)); // Log first 500 characters of CSV
+  console.log("CSV content preview:", csvContent.slice(0, 500)); 
   return csvContent;
 }
 

@@ -43,7 +43,6 @@ contract DataQuality {
         string memory uniqueId,
         string memory ipfsHash
     ) public notBlacklisted {
-        // Allow a dummy IPFS hash for first-time invalid submissions
         bool isValidIpfsHash = bytes(ipfsHash).length > 0 && 
             keccak256(abi.encodePacked(ipfsHash)) != keccak256(abi.encodePacked("INVALID_FIRST_SUBMISSION"));
         require(
