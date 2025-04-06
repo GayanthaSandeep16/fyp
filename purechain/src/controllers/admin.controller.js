@@ -281,7 +281,7 @@ async function getallModels(req, res) {
     const allModels = await convex.query("model:getAllModels");
 
     if (!allModels || allModels.length === 0) {
-      return res.status(404).json({ error: "No models found" });
+      return res.status(200).json({ error: "No models found" });
     }
 
     res.status(200).json(allModels);
