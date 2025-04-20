@@ -1,7 +1,7 @@
 import Web3 from "web3";
 import DataQualityArtifact from "../../build/contracts/DataQuality.json" with { type: "json" };
 
-const web3 = new Web3(process.env.WEB3_PROVIDER || "HTTP://127.0.0.1:8545");
+const web3 = new Web3(process.env.WEB3_PROVIDER);
 
 const contract = new web3.eth.Contract(
   DataQualityArtifact.abi,

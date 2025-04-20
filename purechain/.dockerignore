@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+*.pyc
+__pycache__
+*.pkl
+data/
+.env
+.git
+.gitignore
+*.md
